@@ -3,8 +3,10 @@ import { getPool } from '../db';
 import { requireAuth } from './auth';
 import { listOrgRepos } from '../services/github';
 import { cloneOrUpdate, scanCodeFiles, repoLocalPath } from '../services/git';
-import { estimateCosts, roughTokenCount } from '../services/tokens';
+import { estimateCosts, roughTokenCount, estimateCostsFromTokenCount } from '../services/tokens';
 import { runAudit } from '../services/audit';
+import { countTokens } from '../services/claude';
+import { config } from '../config';
 import type { ScannedFile } from '../services/git';
 
 const router = Router();
@@ -284,6 +286,125 @@ router.post('/estimate', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Error estimating:', err);
     res.status(500).json({ error: 'Failed to estimate costs' });
+  }
+});
+
+// POST /api/estimate/precise — precise estimation using count_tokens API
+router.post('/estimate/precise', async (req: Request, res: Response) => {
+  const { projectId } = req.body;
+  if (!projectId) {
+    res.status(400).json({ error: 'projectId is required' });
+    return;
+  }
+
+  if (!config.anthropicServiceKey) {
+    res.status(503).json({ error: 'Precise estimation is not configured (missing ANTHROPIC_SERVICE_KEY)' });
+    return;
+  }
+
+  const pool = getPool();
+
+  try {
+    // Get project repos
+    const { rows: repos } = await pool.query(
+      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, r.default_branch
+       FROM repositories r
+       JOIN project_repos pr ON pr.repo_id = r.id
+       WHERE pr.project_id = $1`,
+      [projectId]
+    );
+
+    if (repos.length === 0) {
+      res.status(404).json({ error: 'Project not found or has no repos' });
+      return;
+    }
+
+    // Scan files from already-cloned repos
+    const allFiles: ScannedFile[] = [];
+    const repoBreakdown = [];
+    const repoLocalPaths: Map<string, string> = new Map();
+    const fs = await import('fs');
+    const path = await import('path');
+
+    for (const repo of repos) {
+      let files: ScannedFile[];
+      try {
+        const { localPath } = await cloneOrUpdate(repo.repo_url);
+        repoLocalPaths.set(repo.repo_name, localPath);
+        files = scanCodeFiles(localPath);
+        files = files.map(f => ({
+          ...f,
+          relativePath: `${repo.repo_name}/${f.relativePath}`,
+        }));
+      } catch {
+        files = [];
+      }
+      allFiles.push(...files);
+      repoBreakdown.push({ repoName: repo.repo_name, files: files.length, tokens: 0 });
+    }
+
+    if (allFiles.length === 0) {
+      res.status(400).json({ error: 'No code files found' });
+      return;
+    }
+
+    // Build the user message the same way the audit would — file contents concatenated
+    // Count tokens in batches to stay within context limits
+    const BATCH_SIZE = 100;
+    let totalPreciseTokens = 0;
+    const systemPrompt = 'You are a security auditor analyzing source code.';
+
+    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
+      const batch = allFiles.slice(i, i + BATCH_SIZE);
+      const userMessage = batch.map(f => {
+        try {
+          // Resolve absolute path: repoLocalPath + path within repo
+          const slashIdx = f.relativePath.indexOf('/');
+          const repoName = f.relativePath.substring(0, slashIdx);
+          const filePath = f.relativePath.substring(slashIdx + 1);
+          const localPath = repoLocalPaths.get(repoName);
+          if (!localPath) return '';
+          const content = fs.readFileSync(path.join(localPath, filePath), 'utf-8');
+          return `### File: ${f.relativePath}\n\`\`\`\n${content}\n\`\`\``;
+        } catch {
+          return '';
+        }
+      }).filter(Boolean).join('\n\n');
+
+      if (userMessage.length === 0) continue;
+
+      const tokens = await countTokens(
+        config.anthropicServiceKey,
+        systemPrompt,
+        userMessage,
+      );
+      totalPreciseTokens += tokens;
+    }
+
+    // Update repo breakdown with precise token proportions
+    const roughTotal = roughTokenCount(allFiles);
+    for (const rb of repoBreakdown) {
+      const repoFiles = allFiles.filter(f => f.relativePath.startsWith(rb.repoName + '/'));
+      const repoRoughTokens = roughTokenCount(repoFiles);
+      // Scale precise tokens proportionally to each repo's rough share
+      rb.tokens = roughTotal > 0
+        ? Math.round((repoRoughTokens / roughTotal) * totalPreciseTokens)
+        : 0;
+    }
+
+    // Compute costs using precise token count
+    const estimate = await estimateCostsFromTokenCount(pool, allFiles.length, totalPreciseTokens);
+
+    res.json({
+      totalFiles: allFiles.length,
+      totalTokens: totalPreciseTokens,
+      repoBreakdown,
+      estimates: estimate.estimates,
+      isPrecise: true,
+    });
+  } catch (err) {
+    console.error('Error computing precise estimate:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to compute precise estimate' });
   }
 });
 

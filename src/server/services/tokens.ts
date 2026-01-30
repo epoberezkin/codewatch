@@ -100,6 +100,44 @@ export async function estimateCosts(
   };
 }
 
+/**
+ * Compute cost estimates from a known precise total token count.
+ */
+export async function estimateCostsFromTokenCount(
+  pool: Pool,
+  totalFiles: number,
+  totalTokens: number,
+  modelId: string = 'claude-opus-4-5-20251101',
+): Promise<CostEstimate> {
+  const pricing = await getModelPricing(pool, modelId);
+
+  const thoroughTokens = Math.round(totalTokens * 0.33);
+  const opportunisticTokens = Math.round(totalTokens * 0.10);
+
+  return {
+    totalFiles,
+    totalTokens,
+    estimates: {
+      full: {
+        files: totalFiles,
+        tokens: totalTokens,
+        costUsd: calculateCost(totalTokens, pricing),
+      },
+      thorough: {
+        files: Math.ceil(totalFiles * 0.33),
+        tokens: thoroughTokens,
+        costUsd: calculateCost(thoroughTokens, pricing),
+      },
+      opportunistic: {
+        files: Math.ceil(totalFiles * 0.10),
+        tokens: opportunisticTokens,
+        costUsd: calculateCost(opportunisticTokens, pricing),
+      },
+    },
+    isPrecise: true,
+  };
+}
+
 function calculateCost(codeTokens: number, pricing: ModelPricing): number {
   const systemPromptTokens = 3000;
   const classifyTokens = 5000;

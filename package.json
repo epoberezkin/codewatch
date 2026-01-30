@@ -7,10 +7,11 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build:client": "tsc -p tsconfig.client.json",
     "build": "npm run build:server && npm run build:client",
-    "dev": "concurrently \"tsc -p tsconfig.server.json --watch\" \"tsc -p tsconfig.client.json --watch\" \"node --watch dist/server/index.js\"",
-    "start": "node dist/server/index.js",
-    "migrate": "node dist/server/migrate.js",
+    "dev": "concurrently \"tsc -p tsconfig.server.json --watch\" \"tsc -p tsconfig.client.json --watch\" \"node --env-file=.env --watch dist/server/index.js\"",
+    "start": "node --env-file=.env dist/server/index.js",
+    "migrate": "node --env-file=.env dist/server/migrate.js",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "keywords": [],
@@ -31,6 +32,7 @@
     "@types/node": "^25.1.0",
     "@types/pg": "^8.16.0",
     "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

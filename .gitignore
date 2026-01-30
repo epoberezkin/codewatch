@@ -5,6 +5,7 @@ CLAUDE.md
 dist/
 public/js/
 *.tsbuildinfo
+coverage/
 
 # Dependencies
 node_modules/

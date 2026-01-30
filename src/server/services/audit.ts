@@ -266,7 +266,9 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     let classification: ClassificationResult | null = null;
     if (!existingProject[0].category) {
       await updateStatus(pool, auditId, 'classifying');
+      console.log(`[Audit ${auditId.substring(0, 8)}] Classifying project...`);
       classification = await classifyProject(pool, projectId, auditId, apiKey, repoData);
+      console.log(`[Audit ${auditId.substring(0, 8)}] Classification complete: ${classification.category}`);
       actualCostUsd += 0.05; // approximate classification cost
     } else {
       // Load existing classification
@@ -310,9 +312,16 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     const batches = createBatches(filesToAnalyze, repoData);
     const systemPrompt = buildSystemPrompt(classification, level);
     let totalFindings = 0;
+    let batchesSucceeded = 0;
+    let batchesFailed = 0;
+    let lastBatchError = '';
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
+      console.log(
+        `[Audit ${auditId.substring(0, 8)}] Processing batch ${i + 1}/${batches.length} ` +
+        `(${batch.files.length} files, ~${batch.totalTokens} tokens)...`
+      );
 
       // Build user message with file contents
       const fileContents = batch.files.map(f => {
@@ -346,6 +355,10 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       try {
         const response = await callClaude(apiKey, systemPrompt, userMessage);
         actualCostUsd += estimateCallCost(response.inputTokens, response.outputTokens);
+        console.log(
+          `[Audit ${auditId.substring(0, 8)}] Batch ${i + 1}/${batches.length} complete ` +
+          `(${response.inputTokens} in, ${response.outputTokens} out)`
+        );
 
         const result = parseJsonResponse<AnalysisResult>(response.content);
 
@@ -391,8 +404,11 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
             ).length;
           }
         }
+        batchesSucceeded++;
       } catch (err) {
-        console.error(`Batch ${i + 1} analysis error:`, err);
+        console.error(`[Audit ${auditId.substring(0, 8)}] Batch ${i + 1}/${batches.length} failed:`, err);
+        batchesFailed++;
+        lastBatchError = (err as Error).message || String(err);
         for (const f of batch.files) {
           const entry = progressDetail.find(p => p.file === f.relativePath);
           if (entry) entry.status = 'error';
@@ -405,10 +421,30 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         `UPDATE audits SET files_analyzed = $1, progress_detail = $2 WHERE id = $3`,
         [filesAnalyzed, JSON.stringify(progressDetail), auditId]
       );
+
+      // Stop immediately on first failure — don't waste money on remaining batches
+      if (batchesFailed > 0) break;
+    }
+
+    // ---- Fail if analysis is incomplete ----
+    // For security audits, partial results are worse than no results —
+    // a report missing batches could hide critical findings and give false confidence.
+    if (batchesFailed > 0) {
+      const msg = batchesSucceeded === 0
+        ? `All ${batchesFailed} analysis batches failed. ${lastBatchError}`
+        : `${batchesFailed} of ${batches.length} analysis batches failed — ` +
+          `incomplete analysis cannot produce a reliable security report. ${lastBatchError}`;
+      console.error(`[Audit ${auditId.substring(0, 8)}] ${msg}`);
+      await pool.query(
+        `UPDATE audits SET status = 'failed', error_message = $1, actual_cost_usd = $2 WHERE id = $3`,
+        [msg, actualCostUsd, auditId]
+      );
+      return;
     }
 
     // ---- Step 4: Synthesis ----
     await updateStatus(pool, auditId, 'synthesizing');
+    console.log(`[Audit ${auditId.substring(0, 8)}] Synthesizing report from ${totalFindings} findings...`);
 
     const { rows: allFindings } = await pool.query(
       `SELECT severity, title, file_path, description FROM audit_findings WHERE audit_id = $1`,

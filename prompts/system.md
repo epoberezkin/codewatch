@@ -30,4 +30,7 @@ Also identify:
 - dependencies: list of external dependencies with known concern patterns
 - security_posture: overall assessment paragraph
 
-Return valid JSON with structure: { findings: [...], responsible_disclosure: {...}, dependencies: [...], security_posture: "..." }
+CRITICAL: Your entire response must be a single valid JSON object — no text before or after it, no markdown formatting, no explanation. Start your response with { and end with }.
+
+JSON structure:
+{ "findings": [...], "responsible_disclosure": {...}, "dependencies": [...], "security_posture": "..." }

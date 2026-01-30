@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project - CodeWatch</title>
+    <meta name="description" content="Project dashboard and audit history on CodeWatch.">
+    <meta property="og:title" content="Project - CodeWatch">
+    <meta property="og:description" content="Project dashboard and audit history on CodeWatch.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/reports.html">Public Reports</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+                <div id="auth-status"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Project Info -->
+        <div class="card mb-3" id="project-info">
+            <div class="loading-overlay" id="project-loading">
+                <div class="spinner"></div>
+                <span>Loading project...</span>
+            </div>
+            <div class="hidden" id="project-content">
+                <div class="flex-between">
+                    <h1 id="project-name"></h1>
+                    <a class="btn btn-sm btn-primary" id="new-audit-btn" href="#">New Audit</a>
+                </div>
+                <p class="text-muted mt-1" id="project-description"></p>
+                <div class="audit-meta mt-1" id="project-meta"></div>
+            </div>
+        </div>
+
+        <!-- Classification -->
+        <div class="card mb-2 hidden" id="classification-section">
+            <h2 class="mb-1">Classification</h2>
+            <div class="audit-meta mb-1">
+                <span>Category: <strong id="project-category"></strong></span>
+            </div>
+            <div id="threat-model-summary" class="text-sm"></div>
+        </div>
+
+        <!-- Repos -->
+        <div class="card mb-2" id="repos-section">
+            <h2 class="mb-1">Repositories</h2>
+            <div id="repos-list">
+                <div class="loading-overlay">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audit History -->
+        <div class="card mb-2">
+            <h2 class="mb-2">Audit History</h2>
+            <div id="audit-history">
+                <div class="empty-state hidden" id="no-audits">
+                    <h3>No audits yet</h3>
+                    <p>Run the first security audit for this project.</p>
+                </div>
+                <div class="timeline" id="audit-timeline"></div>
+            </div>
+        </div>
+
+        <!-- Current Security Posture -->
+        <div class="card hidden" id="current-posture">
+            <h2 class="mb-1">Current Security Posture</h2>
+            <p id="posture-text" class="text-muted"></p>
+            <div class="severity-summary mt-1" id="posture-severity"></div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/project.js"></script>
+</body>
+</html>

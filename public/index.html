@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeWatch - AI Security Audits for Open Source</title>
+    <meta name="description" content="Comprehensive AI-powered security audits for open-source projects using Claude Opus 4.5. Bring your own API key.">
+    <meta property="og:title" content="CodeWatch - AI Security Audits for Open Source">
+    <meta property="og:description" content="Comprehensive AI-powered security audits for open-source projects using Claude Opus 4.5.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="CodeWatch - AI Security Audits for Open Source">
+    <meta name="twitter:description" content="Comprehensive AI-powered security audits for open-source projects using Claude Opus 4.5.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/reports.html">Public Reports</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+                <div id="auth-status"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <div class="hero">
+            <h1>AI Security Audits for Open Source</h1>
+            <p>Comprehensive security analysis powered by Claude Opus 4.5. Enter a GitHub repo URL to get started.</p>
+        </div>
+
+        <!-- Step 1: Enter repo URL -->
+        <div class="repo-input-section" id="step-1">
+            <div class="step-indicator">
+                <span class="step-number">1</span>
+                Enter a GitHub repository URL
+            </div>
+            <div class="input-with-btn">
+                <input type="url" id="repo-url" placeholder="https://github.com/org/repo" autocomplete="off">
+                <button class="btn btn-primary" id="detect-org-btn">Detect Org</button>
+            </div>
+            <p id="repo-url-error" class="text-sm mt-1 hidden" style="color: var(--error);"></p>
+        </div>
+
+        <!-- Step 2: Select repos (hidden until org detected) -->
+        <div class="repo-selector hidden" id="step-2">
+            <div class="step-indicator">
+                <span class="step-number">2</span>
+                Select repositories for this project
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3 id="org-name"></h3>
+                    <label class="text-sm">
+                        <input type="checkbox" id="select-all"> Select all
+                    </label>
+                </div>
+                <ul class="repo-list" id="repo-list"></ul>
+            </div>
+        </div>
+
+        <!-- Step 3: Auth + Create Project (hidden until repos selected) -->
+        <div class="repo-input-section hidden" id="step-3">
+            <div class="step-indicator">
+                <span class="step-number">3</span>
+                Create project &amp; estimate cost
+            </div>
+            <div id="auth-required" class="notice notice-info hidden">
+                Sign in with GitHub to continue. <a href="/auth/github" id="login-link">Sign in</a>
+            </div>
+            <button class="btn btn-primary btn-block" id="create-project-btn" disabled>
+                Create Project &amp; Estimate Cost
+            </button>
+        </div>
+
+        <!-- Loading state -->
+        <div class="loading-overlay hidden" id="loading">
+            <div class="spinner"></div>
+            <span>Setting up project...</span>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/home.js"></script>
+</body>
+</html>

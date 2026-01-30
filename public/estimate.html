@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Estimate - CodeWatch</title>
+    <meta name="description" content="Estimate the cost of a security audit for your open-source project.">
+    <meta property="og:title" content="Cost Estimate - CodeWatch">
+    <meta property="og:description" content="Estimate the cost of a security audit for your open-source project.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/reports.html">Public Reports</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+                <div id="auth-status"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Project Header -->
+        <div class="card mb-3" id="project-header">
+            <div class="loading-overlay" id="header-loading">
+                <div class="spinner"></div>
+                <span>Loading project...</span>
+            </div>
+            <div class="hidden" id="header-content">
+                <h1 id="project-name"></h1>
+                <p class="text-muted" id="project-description"></p>
+                <div class="audit-meta mt-1" id="project-meta"></div>
+            </div>
+        </div>
+
+        <!-- Previous Audit Notice -->
+        <div class="notice notice-info hidden" id="previous-audit-notice">
+            <strong>Previous audit found.</strong> You can run an incremental audit (analyzes only changes) or a fresh full audit.
+            <div class="mt-1">
+                <button class="btn btn-sm btn-secondary" id="incremental-btn">Run Incremental</button>
+                <button class="btn btn-sm btn-secondary" id="fresh-btn">Run Fresh Audit</button>
+            </div>
+        </div>
+
+        <!-- Estimate Cards -->
+        <div class="estimate-grid" id="estimate-grid">
+            <div class="estimate-card" data-level="full">
+                <h3>Full Audit</h3>
+                <p class="description">Every line of code analyzed exhaustively. All OWASP Top 10, CWE Top 25, and language-specific vulnerabilities checked.</p>
+                <div class="price" id="price-full">--</div>
+                <div class="stats" id="stats-full">
+                    <span>Files: --</span>
+                    <span>Tokens: --</span>
+                </div>
+            </div>
+            <div class="estimate-card" data-level="thorough">
+                <h3>Thorough Audit</h3>
+                <p class="description">Focused on security-critical paths: auth, crypto, input validation, database queries, and API endpoints (~33% of codebase).</p>
+                <div class="price" id="price-thorough">--</div>
+                <div class="stats" id="stats-thorough">
+                    <span>Files: --</span>
+                    <span>Tokens: --</span>
+                </div>
+            </div>
+            <div class="estimate-card" data-level="opportunistic">
+                <h3>Opportunistic Audit</h3>
+                <p class="description">Claude identifies and deeply analyzes the most critical ~10% of the codebase. Targeted, high-signal assessment.</p>
+                <div class="price" id="price-opportunistic">--</div>
+                <div class="stats" id="stats-opportunistic">
+                    <span>Files: --</span>
+                    <span>Tokens: --</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mb-2">
+            <span class="text-sm text-muted" id="estimate-label">Approximate estimate (&plusmn;15%)</span>
+            <br>
+            <button class="btn btn-sm btn-secondary mt-1" id="precise-btn">Get Precise Estimate</button>
+        </div>
+
+        <!-- Clone errors notice -->
+        <div class="notice notice-error hidden" id="clone-errors"></div>
+
+        <!-- Non-owner notice -->
+        <div class="notice notice-warn hidden" id="non-owner-notice">
+            <strong>Non-owner notice:</strong> Findings rated Medium or above will be shown as severity counts only. Full details for serious findings are available after a time-gate (3 months for medium/high, 6 months for critical) or when the project owner publishes the report. By running this audit, you are sponsoring the project's security.
+        </div>
+
+        <!-- API Key + Start -->
+        <div class="card mt-3" id="start-section">
+            <h3 class="mb-2">Start Audit</h3>
+            <div class="form-group">
+                <label for="api-key">Anthropic API Key</label>
+                <input type="password" id="api-key" placeholder="sk-ant-...">
+                <p class="text-sm text-muted mt-1">Your key is used only for this audit and never stored.</p>
+                <p class="text-sm hidden mt-1" id="api-key-error" style="color: var(--error);">API key should start with sk-ant-</p>
+            </div>
+            <button class="btn btn-primary btn-block" id="start-audit-btn" disabled>
+                Select an audit level above
+            </button>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/estimate.js"></script>
+</body>
+</html>

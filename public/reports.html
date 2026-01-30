@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public Reports - CodeWatch</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/reports.html" class="active">Public Reports</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+                <div id="auth-status"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <h1 class="mb-2">Public Audit Reports</h1>
+
+        <div id="reports-list">
+            <div class="empty-state" id="no-reports">
+                <h3>No public reports yet</h3>
+                <p>Published audit reports will appear here.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+
+    <script src="/js/common.js"></script>
+</body>
+</html>

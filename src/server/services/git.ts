@@ -1,0 +1,196 @@
+import simpleGit, { SimpleGit } from 'simple-git';
+import * as fs from 'fs';
+import * as path from 'path';
+import { config } from '../config';
+
+// Code file extensions to include
+const CODE_EXTENSIONS = new Set([
+  // Code
+  '.ts', '.js', '.tsx', '.jsx', '.py', '.rs', '.go', '.java', '.c', '.cpp', '.h', '.hpp',
+  '.cs', '.rb', '.php', '.swift', '.kt', '.scala', '.hs', '.ex', '.erl', '.sh', '.bash',
+  '.zsh', '.pl', '.lua', '.r', '.m', '.mm', '.sol', '.vy',
+  // Config
+  '.json', '.yaml', '.yml', '.toml', '.xml', '.ini', '.cfg', '.conf',
+  // Infra
+  '.tf', '.hcl',
+  // Web
+  '.html', '.css', '.scss', '.sass', '.less', '.svg',
+]);
+
+// Directories to skip
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'vendor', 'dist', 'build', '.next', '__pycache__',
+  '.tox', '.venv', 'venv', 'target', '.gradle', 'Pods',
+]);
+
+// Dockerfile patterns (no extension)
+const INFRA_FILES = new Set([
+  'Dockerfile', '.dockerignore', 'docker-compose.yml', 'docker-compose.yaml',
+  'Makefile', 'Rakefile', 'Gemfile', 'Pipfile', 'Cargo.toml', 'go.mod', 'go.sum',
+]);
+
+const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+
+export interface ScannedFile {
+  relativePath: string; // relative to repo root
+  size: number;
+  roughTokens: number;
+}
+
+export interface DiffResult {
+  added: string[];
+  modified: string[];
+  deleted: string[];
+  renamed: Array<{ from: string; to: string }>;
+}
+
+// ---------- Clone / Update ----------
+
+export function repoLocalPath(repoUrl: string): string {
+  // e.g. https://github.com/org/repo → repos/github.com/org/repo
+  const url = new URL(repoUrl);
+  return path.join(config.reposDir, url.hostname, url.pathname.replace(/^\//, '').replace(/\.git$/, ''));
+}
+
+export async function cloneOrUpdate(repoUrl: string, branch?: string): Promise<{ localPath: string; headSha: string }> {
+  const localPath = repoLocalPath(repoUrl);
+
+  if (fs.existsSync(path.join(localPath, '.git'))) {
+    // Update existing
+    const git = simpleGit(localPath);
+    await git.fetch('origin');
+    const targetBranch = branch || await getDefaultBranch(git);
+    await git.checkout(targetBranch);
+    await git.pull('origin', targetBranch);
+    const log = await git.log({ maxCount: 1 });
+    return { localPath, headSha: log.latest!.hash };
+  } else {
+    // Clone fresh
+    fs.mkdirSync(localPath, { recursive: true });
+    const git = simpleGit();
+    await git.clone(repoUrl, localPath, ['--single-branch']);
+    const localGit = simpleGit(localPath);
+    const log = await localGit.log({ maxCount: 1 });
+    return { localPath, headSha: log.latest!.hash };
+  }
+}
+
+async function getDefaultBranch(git: SimpleGit): Promise<string> {
+  try {
+    const remote = await git.remote(['show', 'origin']);
+    const match = (remote as string).match(/HEAD branch:\s*(\S+)/);
+    if (match) return match[1];
+  } catch {
+    // fallback
+  }
+  return 'main';
+}
+
+// ---------- File Scanning ----------
+
+export function scanCodeFiles(repoRoot: string): ScannedFile[] {
+  const files: ScannedFile[] = [];
+  walkDir(repoRoot, repoRoot, files);
+  return files;
+}
+
+function walkDir(dir: string, root: string, files: ScannedFile[]) {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      walkDir(path.join(dir, entry.name), root, files);
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name);
+      const isCode = CODE_EXTENSIONS.has(ext) || INFRA_FILES.has(entry.name);
+      if (!isCode) continue;
+
+      const fullPath = path.join(dir, entry.name);
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch {
+        continue;
+      }
+
+      if (stat.size > MAX_FILE_SIZE) continue;
+      if (stat.size === 0) continue;
+
+      const relativePath = path.relative(root, fullPath);
+      files.push({
+        relativePath,
+        size: stat.size,
+        roughTokens: Math.ceil(stat.size / 3.3),
+      });
+    }
+  }
+}
+
+// ---------- Diff ----------
+
+export async function diffBetweenCommits(
+  repoPath: string,
+  baseSha: string,
+  headSha: string
+): Promise<DiffResult> {
+  const git = simpleGit(repoPath);
+  const diff = await git.diffSummary([baseSha, headSha]);
+
+  const result: DiffResult = {
+    added: [],
+    modified: [],
+    deleted: [],
+    renamed: [],
+  };
+
+  // Use raw diff to get status flags
+  const raw = await git.raw(['diff', '--name-status', baseSha, headSha]);
+  for (const line of raw.trim().split('\n')) {
+    if (!line) continue;
+    const parts = line.split('\t');
+    const status = parts[0];
+    const filePath = parts[1];
+
+    if (status === 'A') {
+      result.added.push(filePath);
+    } else if (status === 'M') {
+      result.modified.push(filePath);
+    } else if (status === 'D') {
+      result.deleted.push(filePath);
+    } else if (status.startsWith('R')) {
+      result.renamed.push({ from: filePath, to: parts[2] });
+    }
+  }
+
+  return result;
+}
+
+// ---------- Read File Content ----------
+
+export function readFileContent(repoPath: string, relativePath: string): string | null {
+  try {
+    const fullPath = path.join(repoPath, relativePath);
+    return fs.readFileSync(fullPath, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+// ---------- Get HEAD SHA ----------
+
+export async function getHeadSha(repoPath: string): Promise<string> {
+  const git = simpleGit(repoPath);
+  const log = await git.log({ maxCount: 1 });
+  return log.latest!.hash;
+}
+
+export async function getDefaultBranchName(repoPath: string): Promise<string> {
+  const git = simpleGit(repoPath);
+  return getDefaultBranch(git);
+}

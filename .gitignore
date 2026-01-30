@@ -1,0 +1,20 @@
+CLAUDE.md
+.claude
+
+# Build artifacts
+dist/
+public/js/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+
+# Cloned repos (runtime data)
+repos/
+
+# OS
+.DS_Store

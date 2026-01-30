@@ -1,0 +1,38 @@
+{
+  "name": "codewatch",
+  "version": "1.0.0",
+  "description": "AI security audits for open-source projects",
+  "main": "dist/server/index.js",
+  "scripts": {
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "tsc -p tsconfig.client.json",
+    "build": "npm run build:server && npm run build:client",
+    "dev": "concurrently \"tsc -p tsconfig.server.json --watch\" \"tsc -p tsconfig.client.json --watch\" \"node --watch dist/server/index.js\"",
+    "start": "node dist/server/index.js",
+    "migrate": "node dist/server/migrate.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "SimpleX Chat",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "pg": "^8.17.2",
+    "simple-git": "^3.30.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.1.0",
+    "@types/pg": "^8.16.0",
+    "@types/uuid": "^10.0.0",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

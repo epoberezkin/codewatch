@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Progress - CodeWatch</title>
+    <meta name="description" content="Track the progress of your security audit in real time.">
+    <meta property="og:title" content="Audit Progress - CodeWatch">
+    <meta property="og:description" content="Track the progress of your security audit in real time.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="robots" content="noindex">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/reports.html">Public Reports</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+                <div id="auth-status"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Audit Header -->
+        <div class="audit-header">
+            <div>
+                <h1>Audit Progress</h1>
+                <div class="audit-meta" id="audit-meta">
+                    <span id="audit-status-badge"></span>
+                    <span id="audit-level"></span>
+                    <span id="audit-commit"></span>
+                    <span id="audit-type"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-section">
+            <div class="progress-label">
+                <span id="progress-text">Initializing...</span>
+                <span id="progress-count">0 / 0 files</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- File List -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Files</h3>
+                <span class="text-sm text-muted" id="findings-summary"></span>
+            </div>
+            <ul class="file-list" id="file-list">
+                <li class="loading-overlay">
+                    <div class="spinner"></div>
+                    <span>Loading...</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Completion -->
+        <div class="card mt-2 hidden" id="completion-card">
+            <div class="text-center">
+                <h2 class="mb-1">Audit Complete</h2>
+                <p class="text-muted mb-2" id="completion-summary"></p>
+                <a class="btn btn-primary" id="view-report-link" href="#">View Report</a>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div class="notice notice-error hidden" id="error-notice">
+            <strong>Audit failed:</strong> <span id="error-message"></span>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/audit.js"></script>
+</body>
+</html>

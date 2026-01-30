@@ -1,0 +1,9 @@
+{
+  "name": "sample-project",
+  "version": "1.0.0",
+  "description": "Test fixture for CodeWatch integration tests",
+  "main": "src/index.js",
+  "dependencies": {
+    "express": "^4"
+  }
+}

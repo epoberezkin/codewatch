@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects - CodeWatch</title>
+    <meta name="description" content="Browse open-source projects with public security audits on CodeWatch.">
+    <meta property="og:title" content="Projects - CodeWatch">
+    <meta property="og:description" content="Browse open-source projects with public security audits on CodeWatch.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/projects.html">Projects</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+                <div id="auth-status"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <div class="flex-between mb-2">
+            <h1>Projects</h1>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-2" id="filters-section">
+            <div class="flex gap-1" style="flex-wrap: wrap; align-items: center;">
+                <input type="text" id="search-input" placeholder="Search by name or org..." style="flex: 1; min-width: 200px;">
+                <select id="category-filter">
+                    <option value="all">All Categories</option>
+                    <option value="library">Library</option>
+                    <option value="cli_tool">CLI Tool</option>
+                    <option value="build_dependency">Build Dependency</option>
+                    <option value="server_application">Server Application</option>
+                    <option value="client_server">Client/Server</option>
+                    <option value="protocol_implementation">Protocol Implementation</option>
+                    <option value="cryptographic_system">Cryptographic System</option>
+                    <option value="devops_infrastructure">DevOps Infrastructure</option>
+                    <option value="mobile_application">Mobile Application</option>
+                    <option value="web_application">Web Application</option>
+                </select>
+                <select id="severity-filter">
+                    <option value="all">All Severities</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                    <option value="informational">Informational</option>
+                </select>
+                <label class="hidden" id="mine-filter-label" style="white-space: nowrap;">
+                    <input type="checkbox" id="mine-filter"> My Projects
+                </label>
+            </div>
+        </div>
+
+        <!-- Project List -->
+        <div id="projects-list">
+            <div class="loading-overlay">
+                <div class="spinner"></div>
+                <span>Loading projects...</span>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state hidden" id="empty-state">
+            <h3>No projects found</h3>
+            <p id="empty-message">No projects with public audits match your filters.</p>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/projects.js"></script>
+</body>
+</html>

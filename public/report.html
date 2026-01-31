@@ -15,10 +15,10 @@
 <body>
     <header>
         <nav>
-            <a href="/" class="logo">CodeWatch</a>
+            <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
             <div class="nav-right">
                 <div class="nav-links">
-                    <a href="/reports.html">Public Reports</a>
+                    <a href="/projects.html">Projects</a>
                 </div>
                 <button id="theme-toggle" aria-label="Toggle theme"></button>
                 <div id="auth-status"></div>
@@ -40,10 +40,17 @@
                 <div class="severity-summary" id="severity-summary"></div>
                 <div class="hidden" id="owner-controls">
                     <button class="btn btn-sm btn-secondary" id="publish-btn">Make Public</button>
+                    <button class="btn btn-sm btn-secondary hidden" id="unpublish-btn">Make Private</button>
                     <a class="btn btn-sm btn-accent" id="new-audit-link" href="#">New Audit</a>
+                </div>
+                <div class="hidden" id="requester-controls">
+                    <button class="btn btn-sm btn-secondary" id="notify-owner-btn">Notify Owner</button>
                 </div>
             </div>
         </div>
+
+        <!-- Notification Status -->
+        <div class="notice notice-info hidden" id="notification-status"></div>
 
         <!-- Executive Summary -->
         <div class="card mb-2" id="summary-section">
@@ -62,12 +69,42 @@
             <div id="security-posture"></div>
         </div>
 
-        <!-- Redacted Notice (non-owner) -->
-        <div class="redacted-section hidden" id="redacted-notice">
-            <h3>Medium+ Findings Redacted</h3>
-            <p>Detailed findings for Medium, High, and Critical severity are available to the project owner.</p>
-            <p class="text-sm mt-1">Full details will be available after the time-gate expires, or when the owner publishes the report.</p>
+        <!-- Classification -->
+        <div class="card mb-2 hidden" id="classification-section">
+            <h2 class="mb-1">Classification</h2>
+            <div id="classification-content"></div>
         </div>
+
+        <!-- Threat Model -->
+        <div class="card mb-2 hidden" id="threat-model-section">
+            <h2 class="mb-1">Threat Model</h2>
+            <div id="threat-model-content"></div>
+        </div>
+
+        <!-- Component Breakdown -->
+        <div class="card mb-2 hidden" id="component-breakdown-section">
+            <h2 class="mb-1">Component Breakdown</h2>
+            <table class="findings-table" id="component-breakdown-table">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Role</th>
+                        <th>Findings</th>
+                        <th>Tokens Analyzed</th>
+                    </tr>
+                </thead>
+                <tbody id="component-breakdown-body"></tbody>
+            </table>
+        </div>
+
+        <!-- Dependencies -->
+        <div class="card mb-2 hidden" id="dependencies-section">
+            <h2 class="mb-1">Dependencies</h2>
+            <div id="dependencies-content"></div>
+        </div>
+
+        <!-- Redacted Notice (non-owner) -->
+        <div class="notice notice-warning hidden" id="redacted-notice"></div>
 
         <!-- Findings Filter -->
         <div class="flex-between mb-2 hidden" id="findings-header">

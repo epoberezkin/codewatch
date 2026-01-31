@@ -15,10 +15,10 @@
 <body>
     <header>
         <nav>
-            <a href="/" class="logo">CodeWatch</a>
+            <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
             <div class="nav-right">
                 <div class="nav-links">
-                    <a href="/reports.html">Public Reports</a>
+                    <a href="/projects.html">Projects</a>
                 </div>
                 <button id="theme-toggle" aria-label="Toggle theme"></button>
                 <div id="auth-status"></div>
@@ -88,6 +88,49 @@
 
         <!-- Clone errors notice -->
         <div class="notice notice-error hidden" id="clone-errors"></div>
+
+        <!-- Component Analysis Section -->
+        <div class="card mt-3 hidden" id="component-section">
+            <h3 class="mb-2">Component Analysis</h3>
+            <p class="text-muted mb-2">Refine estimates by analyzing project components and their security profiles.</p>
+
+            <!-- Not yet analyzed -->
+            <div id="component-not-analyzed">
+                <div class="form-group">
+                    <label for="analysis-api-key">Anthropic API Key (for component analysis)</label>
+                    <input type="password" id="analysis-api-key" placeholder="sk-ant-...">
+                    <p class="text-sm text-muted mt-1">Uses Sonnet 4.5 (~$0.05-0.20 for analysis). Key is not stored.</p>
+                </div>
+                <button class="btn btn-secondary" id="analyze-components-btn" disabled>Analyze Components</button>
+            </div>
+
+            <!-- Analyzing in progress -->
+            <div class="hidden" id="component-analyzing">
+                <div class="loading-overlay">
+                    <div class="spinner"></div>
+                    <span id="analysis-progress">Analyzing components...</span>
+                </div>
+            </div>
+
+            <!-- Analysis complete: component table -->
+            <div class="hidden" id="component-table-container">
+                <table class="findings-table" id="component-table">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all-components" checked></th>
+                            <th>Component</th>
+                            <th>Repository</th>
+                            <th>Role</th>
+                            <th>Files</th>
+                            <th>Tokens</th>
+                            <th>Security Profile</th>
+                        </tr>
+                    </thead>
+                    <tbody id="component-table-body"></tbody>
+                </table>
+                <div class="mt-2 text-sm text-muted" id="scoped-estimate-label"></div>
+            </div>
+        </div>
 
         <!-- Non-owner notice -->
         <div class="notice notice-warn hidden" id="non-owner-notice">

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 270 70">
+  <g transform="scale(2.17)">
+    <path d="M16 3 L27 8.5 L27 17.5 Q27 26 16 29 Q5 26 5 17.5 L5 8.5 Z"
+          fill="none" stroke="#02C0FF" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M11 12 L9 16 L11 20" stroke="#07b4b9" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M21 12 L23 16 L21 20" stroke="#07b4b9" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17 11 L15 21" stroke="#07b4b9" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+  <text x="69" y="48" font-family="Inter, -apple-system, system-ui, 'Segoe UI', sans-serif" font-size="36" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#02C0FF">Code</tspan><tspan fill="#07b4b9">Watch</tspan>
+  </text>
+</svg>

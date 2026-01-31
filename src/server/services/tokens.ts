@@ -83,17 +83,17 @@ export async function estimateCosts(
       full: {
         files: totalFiles,
         tokens: fullTokens,
-        costUsd: calculateCost(fullTokens, pricing),
+        costUsd: calculateCost(fullTokens, pricing, totalTokens),
       },
       thorough: {
         files: thoroughFileCount,
         tokens: thoroughTokens,
-        costUsd: calculateCost(thoroughTokens, pricing),
+        costUsd: calculateCost(thoroughTokens, pricing, totalTokens),
       },
       opportunistic: {
         files: opportunisticFileCount,
         tokens: opportunisticTokens,
-        costUsd: calculateCost(opportunisticTokens, pricing),
+        costUsd: calculateCost(opportunisticTokens, pricing, totalTokens),
       },
     },
     isPrecise: false,
@@ -121,24 +121,35 @@ export async function estimateCostsFromTokenCount(
       full: {
         files: totalFiles,
         tokens: totalTokens,
-        costUsd: calculateCost(totalTokens, pricing),
+        costUsd: calculateCost(totalTokens, pricing, totalTokens),
       },
       thorough: {
         files: Math.ceil(totalFiles * 0.33),
         tokens: thoroughTokens,
-        costUsd: calculateCost(thoroughTokens, pricing),
+        costUsd: calculateCost(thoroughTokens, pricing, totalTokens),
       },
       opportunistic: {
         files: Math.ceil(totalFiles * 0.10),
         tokens: opportunisticTokens,
-        costUsd: calculateCost(opportunisticTokens, pricing),
+        costUsd: calculateCost(opportunisticTokens, pricing, totalTokens),
       },
     },
     isPrecise: true,
   };
 }
 
-function calculateCost(codeTokens: number, pricing: ModelPricing): number {
+/**
+ * Planning phase cost using Sonnet 4.5 ($3/$15 per Mtok).
+ * Planning always processes ALL files regardless of audit level,
+ * so cost is based on total project tokens, not the level's subset.
+ */
+function calculatePlanningCost(totalCodeTokens: number): number {
+  const planInputTokens = Math.round(totalCodeTokens * 0.05) + 3000; // ~5% of code + prompt overhead
+  const planOutputTokens = Math.max(50, Math.round(totalCodeTokens / 300) * 50); // ~50 tokens per file entry
+  return (planInputTokens / 1_000_000) * 3 + (planOutputTokens / 1_000_000) * 15;
+}
+
+function calculateCost(codeTokens: number, pricing: ModelPricing, totalCodeTokens: number): number {
   const systemPromptTokens = 3000;
   const classifyTokens = 5000;
   const numBatches = Math.max(1, Math.ceil(codeTokens / 150000));
@@ -154,7 +165,71 @@ function calculateCost(codeTokens: number, pricing: ModelPricing): number {
   const synthesisCost = (synthesisInput / 1_000_000) * pricing.inputCostPerMtok
     + (synthesisOutput / 1_000_000) * pricing.outputCostPerMtok;
 
-  return Math.round((inputCost + outputCost + synthesisCost) * 10000) / 10000;
+  // Planning phase cost (Sonnet 4.5, always based on total tokens)
+  const planningCost = calculatePlanningCost(totalCodeTokens);
+
+  return Math.round((inputCost + outputCost + synthesisCost + planningCost) * 10000) / 10000;
+}
+
+/**
+ * Compute cost estimates scoped to selected components.
+ * Uses pre-computed estimated_tokens from the components table.
+ */
+export async function estimateCostsForComponents(
+  pool: Pool,
+  componentIds: string[],
+  modelId: string = 'claude-opus-4-5-20251101',
+): Promise<CostEstimate> {
+  if (componentIds.length === 0) {
+    return {
+      totalFiles: 0,
+      totalTokens: 0,
+      estimates: {
+        full: { files: 0, tokens: 0, costUsd: 0 },
+        thorough: { files: 0, tokens: 0, costUsd: 0 },
+        opportunistic: { files: 0, tokens: 0, costUsd: 0 },
+      },
+      isPrecise: false,
+    };
+  }
+
+  const pricing = await getModelPricing(pool, modelId);
+
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(estimated_files), 0) as total_files,
+            COALESCE(SUM(estimated_tokens), 0) as total_tokens
+     FROM components WHERE id = ANY($1)`,
+    [componentIds]
+  );
+
+  const totalFiles = parseInt(rows[0].total_files);
+  const totalTokens = parseInt(rows[0].total_tokens);
+
+  const thoroughTokens = Math.round(totalTokens * 0.33);
+  const opportunisticTokens = Math.round(totalTokens * 0.10);
+
+  return {
+    totalFiles,
+    totalTokens,
+    estimates: {
+      full: {
+        files: totalFiles,
+        tokens: totalTokens,
+        costUsd: calculateCost(totalTokens, pricing, totalTokens),
+      },
+      thorough: {
+        files: Math.ceil(totalFiles * 0.33),
+        tokens: thoroughTokens,
+        costUsd: calculateCost(thoroughTokens, pricing, totalTokens),
+      },
+      opportunistic: {
+        files: Math.ceil(totalFiles * 0.10),
+        tokens: opportunisticTokens,
+        costUsd: calculateCost(opportunisticTokens, pricing, totalTokens),
+      },
+    },
+    isPrecise: false,
+  };
 }
 
 async function getModelPricing(pool: Pool, modelId: string): Promise<ModelPricing> {

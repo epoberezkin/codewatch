@@ -9,11 +9,19 @@ interface ProjectDetail {
   description: string;
   githubOrg: string;
   category: string;
-  involvedParties: Record<string, unknown> | null;
+  license: string | null;
+  involvedParties: Record<string, { can: string; cannot: string }> | null;
   threatModel: string | null;
   threatModelSource: string | null;
   totalFiles: number;
   totalTokens: number;
+  createdBy: string;
+  creatorUsername: string | null;
+  ownership: {
+    isOwner: boolean;
+    role: string | null;
+    needsReauth: boolean;
+  } | null;
   repos: Array<{
     id: string;
     repoName: string;
@@ -21,20 +29,41 @@ interface ProjectDetail {
     language: string;
     stars: number;
     description: string;
+    license: string | null;
+  }>;
+  components: Array<{
+    id: string;
+    name: string;
+    description: string;
+    role: string;
+    repoName: string;
+    filePatterns: string[];
+    languages: string[];
+    securityProfile: { summary?: string; threat_surface?: string[] } | null;
+    estimatedFiles: number;
+    estimatedTokens: number;
+  }>;
+  dependencies: Array<{
+    id: string;
+    name: string;
+    version: string;
+    ecosystem: string;
+    sourceRepoUrl: string | null;
+    linkedProjectId: string | null;
+    repoName: string | null;
+  }>;
+  audits: Array<{
+    id: string;
+    auditLevel: string;
+    isIncremental: boolean;
+    status: string;
+    maxSeverity: string | null;
+    createdAt: string;
+    completedAt: string | null;
+    isPublic: boolean;
+    severityCounts: Record<string, number>;
   }>;
   createdAt: string;
-}
-
-interface AuditSummary {
-  id: string;
-  auditLevel: string;
-  isIncremental: boolean;
-  status: string;
-  maxSeverity: string | null;
-  createdAt: string;
-  completedAt: string | null;
-  severityCounts: Record<string, number>;
-  commits: Array<{ repoName: string; commitSha: string }>;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -44,13 +73,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Wait for auth check to complete before reading currentUser
+  await waitForAuth();
+
   try {
-    const [project, audits] = await Promise.all([
-      apiFetch<ProjectDetail>(`/api/projects/${projectId}`),
-      apiFetch<AuditSummary[]>(`/api/project/${projectId}/audits`),
-    ]);
+    const project = await apiFetch<ProjectDetail>(`/api/projects/${projectId}`);
     renderProject(project);
-    renderAudits(audits, projectId);
+    renderComponents(project.components);
+    renderDependencies(project.dependencies);
+    renderAudits(project.audits);
+    renderDeleteButton(project);
   } catch (err) {
     setHtml('project-loading',
       `<div class="notice notice-error">${escapeHtml(err instanceof Error ? err.message : 'Failed to load project')}</div>`);
@@ -64,12 +96,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     setText('project-name', project.name);
     setText('project-description', project.description || `GitHub org: ${project.githubOrg}`);
 
+    // Ownership badge
+    if (project.ownership) {
+      const badgeEl = $('ownership-badge');
+      if (badgeEl) {
+        if (project.ownership.isOwner) {
+          badgeEl.innerHTML = '<span class="badge badge-completed">owner</span>';
+        } else if (project.ownership.needsReauth) {
+          badgeEl.innerHTML = `<a href="/auth/github?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}" class="badge badge-pending" style="text-decoration: none;">re-auth needed</a>`;
+        }
+      }
+    }
+
     const newAuditBtn = $('new-audit-btn') as HTMLAnchorElement | null;
     if (newAuditBtn) newAuditBtn.href = `/estimate.html?projectId=${project.id}`;
 
     // Meta
     const metaParts = [
       `<span>Org: ${escapeHtml(project.githubOrg)}</span>`,
+      project.license ? `<span>License: ${escapeHtml(project.license)}</span>` : '',
       `<span>${project.repos.length} repo${project.repos.length !== 1 ? 's' : ''}</span>`,
       project.totalFiles ? `<span>${formatNumber(project.totalFiles)} files</span>` : '',
       project.totalTokens ? `<span>${formatNumber(project.totalTokens)} tokens</span>` : '',
@@ -81,10 +126,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       show('classification-section');
       setText('project-category', project.category.replace(/_/g, ' '));
 
-      if (project.threatModel) {
+      // Threat model: show parties table if involvedParties is present
+      if (project.involvedParties && Object.keys(project.involvedParties).length > 0) {
+        const parties = project.involvedParties;
+        const partyRows = Object.entries(parties).map(([party, info]) => `
+          <tr>
+            <td><strong>${escapeHtml(party.replace(/_/g, ' '))}</strong></td>
+            <td>${escapeHtml(info?.can || '-')}</td>
+            <td>${escapeHtml(info?.cannot || '-')}</td>
+          </tr>
+        `).join('');
+
+        const sourceLabel = project.threatModelSource === 'repo'
+          ? 'From Repository'
+          : project.threatModelSource === 'generated'
+            ? 'Generated by CodeWatch'
+            : project.threatModelSource || 'unknown';
+
         setHtml('threat-model-summary', `
-          <p class="text-muted mb-1">Source: ${project.threatModelSource || 'unknown'}</p>
-          <pre class="code-block">${escapeHtml(project.threatModel.substring(0, 2000))}</pre>
+          <span class="badge badge-${project.threatModelSource === 'repo' ? 'completed' : 'running'} mb-1">${escapeHtml(sourceLabel)}</span>
+          <table class="table mt-1">
+            <thead><tr><th>Party</th><th>Can</th><th>Cannot</th></tr></thead>
+            <tbody>${partyRows}</tbody>
+          </table>
+          ${project.threatModel ? `<p class="text-sm text-muted mt-1">${escapeHtml(project.threatModel)}</p>` : ''}
+        `);
+      } else if (project.threatModel) {
+        const sourceLabel = project.threatModelSource === 'repo'
+          ? 'From Repository'
+          : project.threatModelSource === 'generated'
+            ? 'Generated by CodeWatch'
+            : project.threatModelSource || 'unknown';
+
+        setHtml('threat-model-summary', `
+          <span class="badge badge-${project.threatModelSource === 'repo' ? 'completed' : 'running'} mb-1">${escapeHtml(sourceLabel)}</span>
+          <pre class="code-block mt-1">${escapeHtml(project.threatModel.substring(0, 2000))}</pre>
         `);
       }
     }
@@ -96,6 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div>
             <strong>${escapeHtml(r.repoName)}</strong>
             ${r.language ? `<span class="text-sm text-muted"> &middot; ${escapeHtml(r.language)}</span>` : ''}
+            ${r.license ? `<span class="text-sm text-muted"> &middot; ${escapeHtml(r.license)}</span>` : ''}
           </div>
           <span class="text-sm text-muted">${r.stars.toLocaleString()} stars</span>
         </div>
@@ -105,7 +182,102 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHtml('repos-list', reposHtml);
   }
 
-  function renderAudits(audits: AuditSummary[], projectId: string) {
+  function renderComponents(components: ProjectDetail['components']) {
+    if (components.length === 0) return;
+    show('components-section');
+
+    const tbody = $('components-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = components.map(c => `
+      <tr>
+        <td>
+          <strong>${escapeHtml(c.name)}</strong>
+          <br><small class="text-muted">${escapeHtml(c.description.substring(0, 80))}</small>
+        </td>
+        <td>${escapeHtml(c.repoName)}</td>
+        <td>${escapeHtml(c.role || '--')}</td>
+        <td>${formatNumber(c.estimatedFiles)}</td>
+        <td>${formatNumber(c.estimatedTokens)}</td>
+        <td>${c.securityProfile?.summary ? `<small>${escapeHtml(c.securityProfile.summary.substring(0, 60))}</small>` : '--'}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderDependencies(dependencies: ProjectDetail['dependencies']) {
+    if (dependencies.length === 0) return;
+    show('dependencies-section');
+
+    const grouped: Record<string, typeof dependencies> = {};
+    for (const dep of dependencies) {
+      const eco = dep.ecosystem || 'other';
+      if (!grouped[eco]) grouped[eco] = [];
+      grouped[eco].push(dep);
+    }
+
+    let html = '';
+    for (const [ecosystem, deps] of Object.entries(grouped)) {
+      html += `<h4 class="mt-1">${escapeHtml(ecosystem)}</h4><ul>`;
+      for (const dep of deps) {
+        const version = dep.version ? ` <span class="text-muted">${escapeHtml(dep.version)}</span>` : '';
+        let action = '';
+        if (dep.linkedProjectId) {
+          action = ` <a href="/project.html?projectId=${dep.linkedProjectId}" class="btn btn-sm btn-secondary">View Project</a>`;
+        } else if (currentUser) {
+          action = ` <button class="btn btn-sm btn-secondary add-as-project-btn" data-dep-id="${dep.id}" data-name="${escapeHtml(dep.name)}" data-url="${dep.sourceRepoUrl ? escapeHtml(dep.sourceRepoUrl) : ''}">Add as Project</button>`;
+        } else if (dep.sourceRepoUrl) {
+          action = ` <a href="${escapeHtml(dep.sourceRepoUrl)}" target="_blank" class="text-sm">source</a>`;
+        }
+        html += `<li>${escapeHtml(dep.name)}${version}${action}</li>`;
+      }
+      html += '</ul>';
+    }
+    setHtml('dependencies-list', html);
+
+    // Attach "Add as Project" click handlers
+    document.querySelectorAll<HTMLButtonElement>('.add-as-project-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const depId = btn.dataset.depId!;
+        const depName = btn.dataset.name!;
+        const sourceUrl = btn.dataset.url || '';
+
+        if (!sourceUrl) {
+          alert('No source repository URL available for this dependency.');
+          return;
+        }
+
+        // Extract org and repo from GitHub URL
+        const match = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+        if (!match) {
+          alert('Source URL is not a recognized GitHub repository.');
+          return;
+        }
+
+        const githubOrg = match[1];
+        const repoName = match[2].replace(/\.git$/, '');
+
+        if (!confirm(`Add "${depName}" (https://github.com/${githubOrg}/${repoName}) as a new CodeWatch project?`)) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+        try {
+          const newProject = await apiPost<{ projectId: string }>('/api/projects', {
+            githubOrg,
+            repoNames: [repoName],
+          });
+          // Link the dependency to the new project
+          await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: newProject.projectId });
+          btn.outerHTML = `<a href="/project.html?projectId=${newProject.projectId}" class="btn btn-sm btn-secondary">View Project</a>`;
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Add as Project';
+          alert(err instanceof Error ? err.message : 'Failed to add as project');
+        }
+      });
+    });
+  }
+
+  function renderAudits(audits: ProjectDetail['audits']) {
     const timeline = $('audit-timeline');
     const noAudits = $('no-audits');
 
@@ -123,10 +295,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         .map(s => `<span class="severity ${severityClass(s)}">${audit.severityCounts[s]} ${s}</span>`)
         .join(' ');
 
-      const commitText = audit.commits?.map(c =>
-        `${c.repoName}@${c.commitSha.substring(0, 7)}`
-      ).join(', ') || '';
-
       const link = audit.status === 'completed'
         ? `/report.html?auditId=${audit.id}`
         : audit.status === 'failed'
@@ -140,13 +308,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="timeline-date">${formatDate(audit.createdAt)}</div>
             <div class="flex-between">
               <div>
-                <strong>${audit.auditLevel}</strong>
+                <strong>${escapeHtml(audit.auditLevel)}</strong>
                 ${audit.isIncremental ? '<span class="badge badge-running">incremental</span>' : ''}
-                <span class="badge badge-${audit.status === 'completed' ? 'completed' : audit.status === 'failed' ? 'failed' : 'running'}">${audit.status}</span>
+                <span class="badge badge-${audit.status === 'completed' ? 'completed' : audit.status === 'failed' ? 'failed' : 'running'}">${escapeHtml(audit.status)}</span>
+                ${audit.isPublic ? '<span class="badge badge-completed">public</span>' : ''}
               </div>
               <a href="${link}" class="btn btn-sm btn-secondary">View</a>
             </div>
-            ${commitText ? `<div class="text-sm text-mono text-muted mt-1">${escapeHtml(commitText)}</div>` : ''}
             ${sevBadges ? `<div class="severity-summary mt-1">${sevBadges}</div>` : ''}
           </div>
         </div>
@@ -164,6 +332,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         .map(s => `<div class="severity-count"><span class="severity ${severityClass(s)}">${s}</span> ${latest.severityCounts[s]}</div>`)
         .join('');
       setHtml('posture-severity', postureSev);
+    }
+  }
+
+  function renderDeleteButton(project: ProjectDetail) {
+    const deleteBtn = $('delete-project-btn');
+    if (!deleteBtn) return;
+
+    // Show delete button only if current user is the creator
+    if (currentUser && currentUser.id === project.createdBy) {
+      show('delete-section');
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to delete this project? This cannot be undone.')) return;
+
+        try {
+          await apiFetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+          window.location.href = '/projects.html';
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Failed to delete project');
+        }
+      });
     }
   }
 });

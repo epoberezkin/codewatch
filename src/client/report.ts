@@ -27,18 +27,45 @@ interface ReportData {
   auditLevel: string;
   isIncremental: boolean;
   isOwner: boolean;
+  isRequester: boolean;
   isPublic: boolean;
   publishableAfter: string | null;
+  ownerNotified: boolean;
+  ownerNotifiedAt: string | null;
   maxSeverity: string | null;
+  // Classification & threat model
+  category: string | null;
+  projectDescription: string | null;
+  involvedParties: Record<string, { can: string; cannot: string }> | null;
+  threatModel: string | null;
+  threatModelSource: string | null;
   commits: Array<{ repoName: string; commitSha: string }>;
   reportSummary: {
-    executiveSummary: string;
-    securityPosture: string;
-    responsibleDisclosure: Record<string, string>;
+    executive_summary: string;
+    security_posture: string;
+    responsible_disclosure: Record<string, string>;
   } | null;
   severityCounts: Record<string, number>;
   findings: Finding[];
   redactedSeverities: string[];
+  redactionNotice: string | null;
+  componentBreakdown: Array<{
+    componentId: string;
+    name: string;
+    role: string;
+    tokensAnalyzed: number;
+    findingsCount: number;
+  }>;
+  dependencies: Array<{
+    id: string;
+    name: string;
+    version: string;
+    ecosystem: string;
+    sourceRepoUrl: string | null;
+    linkedProjectId: string | null;
+    repoName: string | null;
+  }>;
+  accessTier: 'owner' | 'requester' | 'public';
   createdAt: string;
   completedAt: string;
 }
@@ -59,6 +86,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Wait for auth check to complete before reading currentUser
+  await waitForAuth();
+
   let reportData: ReportData | null = null;
 
   try {
@@ -76,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHtml('report-meta', `
       <span><a href="/project.html?projectId=${data.projectId}">${escapeHtml(data.projectName)}</a></span>
       <span>${formatDate(data.completedAt || data.createdAt)}</span>
-      <span>${data.auditLevel}${data.isIncremental ? ' (incremental)' : ''}</span>
+      <span>${escapeHtml(data.auditLevel)}${data.isIncremental ? ' (incremental)' : ''}</span>
       ${data.commits.map(c => `<span class="text-mono">${escapeHtml(c.repoName)}@${c.commitSha.substring(0, 7)}</span>`).join('')}
     `);
 
@@ -96,21 +126,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (data.isPublic) {
         hide('publish-btn');
+        show('unpublish-btn');
+      }
+    }
+
+    // Requester controls: "Notify Owner" button
+    if (data.isRequester && !data.isOwner && !data.ownerNotified) {
+      show('requester-controls');
+    }
+
+    // Show notification status if owner was notified
+    if (data.ownerNotified && data.publishableAfter) {
+      show('notification-status');
+      const statusEl = $('notification-status');
+      if (statusEl) {
+        statusEl.innerHTML = `<p>Owner notified${data.ownerNotifiedAt ? ` on ${formatDate(data.ownerNotifiedAt)}` : ''}. Full report will be available after ${formatDate(data.publishableAfter)}.</p>`;
       }
     }
 
     // Executive summary
     if (data.reportSummary) {
-      setHtml('executive-summary', `<p>${escapeHtml(data.reportSummary.executiveSummary)}</p>`);
+      setHtml('executive-summary', `<p>${escapeHtml(data.reportSummary.executive_summary)}</p>`);
 
       // Security posture
       show('posture-section');
-      setHtml('security-posture', `<p>${escapeHtml(data.reportSummary.securityPosture)}</p>`);
+      setHtml('security-posture', `<p>${escapeHtml(data.reportSummary.security_posture)}</p>`);
 
       // Responsible disclosure
-      if (data.reportSummary.responsibleDisclosure && Object.keys(data.reportSummary.responsibleDisclosure).length > 0) {
+      if (data.reportSummary.responsible_disclosure && Object.keys(data.reportSummary.responsible_disclosure).length > 0) {
         show('disclosure-section');
-        const discHtml = Object.entries(data.reportSummary.responsibleDisclosure)
+        const discHtml = Object.entries(data.reportSummary.responsible_disclosure)
           .map(([k, v]) => `<p><strong>${escapeHtml(k)}:</strong> ${escapeHtml(v)}</p>`)
           .join('');
         setHtml('disclosure-content', discHtml);
@@ -119,18 +164,155 @@ document.addEventListener('DOMContentLoaded', async () => {
       setHtml('executive-summary', '<p class="text-muted">No summary available.</p>');
     }
 
+    // Classification section
+    if (data.category) {
+      show('classification-section');
+      const classHtml: string[] = [];
+      classHtml.push(`<span class="badge badge-running">${escapeHtml(data.category.replace(/_/g, ' '))}</span>`);
+      if (data.projectDescription) {
+        classHtml.push(`<p class="mt-1">${escapeHtml(data.projectDescription)}</p>`);
+      }
+      setHtml('classification-content', classHtml.join(''));
+    }
+
+    // Threat model section
+    if (data.involvedParties && Object.keys(data.involvedParties).length > 0) {
+      show('threat-model-section');
+      const parties = data.involvedParties;
+      const partyRows = Object.entries(parties).map(([party, info]) => `
+        <tr>
+          <td><strong>${escapeHtml(party.replace(/_/g, ' '))}</strong></td>
+          <td>${escapeHtml(info?.can || '-')}</td>
+          <td>${escapeHtml(info?.cannot || '-')}</td>
+        </tr>
+      `).join('');
+
+      const sourceLabel = data.threatModelSource === 'repo'
+        ? 'From Repository'
+        : data.threatModelSource === 'generated'
+          ? 'Generated by CodeWatch'
+          : data.threatModelSource || 'unknown';
+
+      let tmHtml = `<span class="badge badge-${data.threatModelSource === 'repo' ? 'completed' : 'running'} mb-1">${escapeHtml(sourceLabel)}</span>`;
+      tmHtml += `<table class="table mt-1"><thead><tr><th>Party</th><th>Can</th><th>Cannot</th></tr></thead><tbody>${partyRows}</tbody></table>`;
+      if (data.threatModel) {
+        tmHtml += `<p class="text-sm text-muted mt-1">${escapeHtml(data.threatModel)}</p>`;
+      }
+      setHtml('threat-model-content', tmHtml);
+    } else if (data.threatModel) {
+      show('threat-model-section');
+      const sourceLabel = data.threatModelSource === 'repo'
+        ? 'From Repository'
+        : data.threatModelSource === 'generated'
+          ? 'Generated by CodeWatch'
+          : data.threatModelSource || 'unknown';
+      setHtml('threat-model-content', `
+        <span class="badge badge-${data.threatModelSource === 'repo' ? 'completed' : 'running'} mb-1">${escapeHtml(sourceLabel)}</span>
+        <pre class="code-block mt-1">${escapeHtml(data.threatModel.substring(0, 2000))}</pre>
+      `);
+    }
+
+    // Component breakdown
+    if (data.componentBreakdown && data.componentBreakdown.length > 0) {
+      show('component-breakdown-section');
+      const tbody = $('component-breakdown-body');
+      if (tbody) {
+        tbody.innerHTML = data.componentBreakdown.map(cb => `
+          <tr>
+            <td><strong>${escapeHtml(cb.name)}</strong></td>
+            <td>${escapeHtml(cb.role || '--')}</td>
+            <td>${cb.findingsCount}</td>
+            <td>${formatNumber(cb.tokensAnalyzed)}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    // Dependencies
+    if (data.dependencies && data.dependencies.length > 0) {
+      show('dependencies-section');
+      const grouped: Record<string, typeof data.dependencies> = {};
+      for (const dep of data.dependencies) {
+        const eco = dep.ecosystem || 'other';
+        if (!grouped[eco]) grouped[eco] = [];
+        grouped[eco].push(dep);
+      }
+      let depsHtml = '';
+      for (const [ecosystem, deps] of Object.entries(grouped)) {
+        depsHtml += `<h4 class="mt-1">${escapeHtml(ecosystem)}</h4><ul>`;
+        for (const dep of deps) {
+          const version = dep.version ? ` <span class="text-muted">${escapeHtml(dep.version)}</span>` : '';
+          let action = '';
+          if (dep.linkedProjectId) {
+            action = ` <a href="/project.html?projectId=${dep.linkedProjectId}" class="btn btn-sm btn-secondary">View Project</a>`;
+          } else if (currentUser) {
+            action = ` <button class="btn btn-sm btn-secondary add-dep-project-btn" data-dep-id="${dep.id}" data-name="${escapeHtml(dep.name)}" data-url="${dep.sourceRepoUrl ? escapeHtml(dep.sourceRepoUrl) : ''}">Add as Project</button>`;
+          } else if (dep.sourceRepoUrl) {
+            action = ` <a href="${escapeHtml(dep.sourceRepoUrl)}" target="_blank" class="text-sm">source</a>`;
+          }
+          depsHtml += `<li>${escapeHtml(dep.name)}${version}${action}</li>`;
+        }
+        depsHtml += '</ul>';
+      }
+      setHtml('dependencies-content', depsHtml);
+
+      // Attach "Add as Project" handlers for dependencies
+      document.querySelectorAll<HTMLButtonElement>('.add-dep-project-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const depId = btn.dataset.depId!;
+          const depName = btn.dataset.name!;
+          const sourceUrl = btn.dataset.url || '';
+
+          if (!sourceUrl) {
+            alert('No source repository URL available for this dependency.');
+            return;
+          }
+
+          const match = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+          if (!match) {
+            alert('Source URL is not a recognized GitHub repository.');
+            return;
+          }
+
+          const githubOrg = match[1];
+          const repoName = match[2].replace(/\.git$/, '');
+
+          if (!confirm(`Add "${depName}" (https://github.com/${githubOrg}/${repoName}) as a new CodeWatch project?`)) return;
+
+          btn.disabled = true;
+          btn.textContent = 'Adding...';
+          try {
+            const newProject = await apiPost<{ projectId: string }>('/api/projects', {
+              githubOrg,
+              repoNames: [repoName],
+            });
+            await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: newProject.projectId });
+            btn.outerHTML = `<a href="/project.html?projectId=${newProject.projectId}" class="btn btn-sm btn-secondary">View Project</a>`;
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = 'Add as Project';
+            alert(err instanceof Error ? err.message : 'Failed to add as project');
+          }
+        });
+      });
+    }
+
     // Redacted notice
-    if (data.redactedSeverities && data.redactedSeverities.length > 0) {
+    if (data.redactionNotice) {
       show('redacted-notice');
+      const noticeEl = $('redacted-notice');
+      if (noticeEl) {
+        noticeEl.innerHTML = `<p>${escapeHtml(data.redactionNotice)}</p>`;
+      }
     }
 
     // Findings
     renderFindings(data.findings, data.isOwner);
 
-    // Comments — visible to all, form only for owner
+    // Comments — visible to all, form only for participants (owner or requester)
     show('comments-section');
     loadComments(auditId!);
-    if (data.isOwner) {
+    if (currentUser && (data.isOwner || data.isRequester)) {
       show('comment-form');
     }
   }
@@ -144,9 +326,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     show('findings-header');
     renderFindingsList(findings);
 
-    // Filters
+    // Filters — constrain dropdowns to only values present in findings
     const sevFilter = $('severity-filter') as HTMLSelectElement | null;
     const statusFilter = $('status-filter') as HTMLSelectElement | null;
+
+    if (sevFilter) {
+      const presentSeverities = new Set(findings.map(f => f.severity));
+      const sevOrder = ['critical', 'high', 'medium', 'low', 'informational'];
+      sevFilter.innerHTML = '<option value="all">All Severities</option>' +
+        sevOrder.filter(s => presentSeverities.has(s))
+          .map(s => `<option value="${s}">${s.charAt(0).toUpperCase() + s.slice(1)}</option>`)
+          .join('');
+    }
+
+    if (statusFilter) {
+      const presentStatuses = new Set(findings.map(f => f.status));
+      const statusLabels: Record<string, string> = {
+        open: 'Open', fixed: 'Fixed', false_positive: 'False Positive',
+        accepted: 'Accepted', wont_fix: "Won't Fix",
+      };
+      statusFilter.innerHTML = '<option value="all">All Statuses</option>' +
+        Object.entries(statusLabels).filter(([k]) => presentStatuses.has(k))
+          .map(([k, v]) => `<option value="${k}">${v}</option>`)
+          .join('');
+    }
 
     function applyFilters() {
       const sev = sevFilter?.value || 'all';
@@ -172,22 +375,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const isOwner = reportData?.isOwner || false;
-    list.innerHTML = findings.map(f => `
-      <div class="finding-card finding-${f.severity}">
+    list.innerHTML = findings.map(f => {
+      const isRedacted = !f.title && !f.description;
+      return `
+      <div class="finding-card finding-${escapeHtml(f.severity)}">
         <div class="finding-header">
-          <span class="finding-title">${escapeHtml(f.title)}</span>
+          <span class="finding-title">${isRedacted ? '<em>[Redacted]</em>' : escapeHtml(f.title)}</span>
           <div class="finding-header-right">
-            <span class="badge badge-${f.status === 'open' ? 'pending' : f.status === 'fixed' ? 'completed' : 'running'}">${f.status.replace('_', ' ')}</span>
-            <span class="severity ${severityClass(f.severity)}">${f.severity}</span>
+            <span class="badge badge-${f.status === 'open' ? 'pending' : f.status === 'fixed' ? 'completed' : 'running'}">${escapeHtml((f.status || '').replace(/_/g, ' '))}</span>
+            <span class="severity ${severityClass(f.severity)}">${escapeHtml(f.severity)}</span>
           </div>
         </div>
-        <div class="finding-location">
-          ${escapeHtml(f.repoName)}/${escapeHtml(f.filePath)}:${f.lineStart}${f.lineEnd ? '-' + f.lineEnd : ''}
+        ${f.filePath ? `<div class="finding-location">
+          ${escapeHtml(f.repoName || '')}/${escapeHtml(f.filePath)}:${f.lineStart}${f.lineEnd ? '-' + f.lineEnd : ''}
           ${f.cweId ? ` &middot; ${escapeHtml(f.cweId)}` : ''}
           ${f.cvssScore ? ` &middot; CVSS ${f.cvssScore}` : ''}
-        </div>
+        </div>` : (f.cweId ? `<div class="finding-location">${escapeHtml(f.cweId)}</div>` : '')}
         <div class="finding-body">
-          <p>${escapeHtml(f.description)}</p>
+          ${f.description ? `<p>${escapeHtml(f.description)}</p>` : (isRedacted ? '<p class="text-muted">Finding details redacted during responsible disclosure period.</p>' : '')}
           ${f.exploitation ? `<h4>Exploitation</h4><p>${escapeHtml(f.exploitation)}</p>` : ''}
           ${f.recommendation ? `<h4>Recommendation</h4><p>${escapeHtml(f.recommendation)}</p>` : ''}
           ${f.codeSnippet ? `<h4>Code</h4><pre class="code-block">${escapeHtml(f.codeSnippet)}</pre>` : ''}
@@ -204,7 +409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         ` : ''}
       </div>
-    `).join('');
+    `; }).join('');
 
     // Attach status change handlers for owner
     if (isOwner) {
@@ -223,12 +428,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const badge = card?.querySelector('.finding-header-right .badge');
             if (badge) {
               badge.className = `badge badge-${el.value === 'open' ? 'pending' : el.value === 'fixed' ? 'completed' : 'running'}`;
-              badge.textContent = el.value.replace('_', ' ');
+              badge.textContent = el.value.replace(/_/g, ' ');
             }
+            // Update in-memory finding state on success
+            const masterFinding = reportData?.findings.find(ff => ff.id === findingId);
+            if (masterFinding) masterFinding.status = el.value;
           } catch (err) {
             alert(err instanceof Error ? err.message : 'Failed to update status');
-            // Revert
-            const finding = findings.find(ff => ff.id === findingId);
+            // Revert to last known state
+            const finding = reportData?.findings.find(ff => ff.id === findingId);
             if (finding) el.value = finding.status;
           }
         });
@@ -278,12 +486,41 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Publish button
   const publishBtn = $('publish-btn');
   publishBtn?.addEventListener('click', async () => {
-    if (!auditId || !confirm('Make this report public? This cannot be undone.')) return;
+    if (!auditId || !confirm('Make this report public?')) return;
     try {
       await apiPost(`/api/audit/${auditId}/publish`, {});
       window.location.reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to publish');
+    }
+  });
+
+  // Unpublish button
+  const unpublishBtn = $('unpublish-btn');
+  unpublishBtn?.addEventListener('click', async () => {
+    if (!auditId || !confirm('Make this report private again?')) return;
+    try {
+      await apiPost(`/api/audit/${auditId}/unpublish`, {});
+      window.location.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to unpublish');
+    }
+  });
+
+  // Notify Owner button
+  const notifyBtn = $('notify-owner-btn');
+  notifyBtn?.addEventListener('click', async () => {
+    if (!auditId || !confirm('Notify the project owner about this audit via a GitHub issue? This starts the responsible disclosure timer.')) return;
+    try {
+      const result = await apiPost<{ ok: boolean; publishableAfter: string | null }>(`/api/audit/${auditId}/notify-owner`, {});
+      if (result.publishableAfter) {
+        alert(`Owner notified. Full report will be available after ${new Date(result.publishableAfter).toLocaleDateString()}.`);
+      } else {
+        alert('Owner notified. Report has no time-gated findings.');
+      }
+      window.location.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to notify owner');
     }
   });
 });

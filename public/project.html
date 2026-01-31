@@ -15,10 +15,10 @@
 <body>
     <header>
         <nav>
-            <a href="/" class="logo">CodeWatch</a>
+            <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
             <div class="nav-right">
                 <div class="nav-links">
-                    <a href="/reports.html">Public Reports</a>
+                    <a href="/projects.html">Projects</a>
                 </div>
                 <button id="theme-toggle" aria-label="Toggle theme"></button>
                 <div id="auth-status"></div>
@@ -35,7 +35,10 @@
             </div>
             <div class="hidden" id="project-content">
                 <div class="flex-between">
-                    <h1 id="project-name"></h1>
+                    <div>
+                        <h1 id="project-name" style="display: inline;"></h1>
+                        <span id="ownership-badge"></span>
+                    </div>
                     <a class="btn btn-sm btn-primary" id="new-audit-btn" href="#">New Audit</a>
                 </div>
                 <p class="text-muted mt-1" id="project-description"></p>
@@ -45,7 +48,7 @@
 
         <!-- Classification -->
         <div class="card mb-2 hidden" id="classification-section">
-            <h2 class="mb-1">Classification</h2>
+            <h2 class="mb-1">Classification &amp; Threat Model</h2>
             <div class="audit-meta mb-1">
                 <span>Category: <strong id="project-category"></strong></span>
             </div>
@@ -60,6 +63,30 @@
                     <div class="spinner"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Components -->
+        <div class="card mb-2 hidden" id="components-section">
+            <h2 class="mb-1">Components</h2>
+            <table class="findings-table" id="components-table">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Repository</th>
+                        <th>Role</th>
+                        <th>Files</th>
+                        <th>Tokens</th>
+                        <th>Security Profile</th>
+                    </tr>
+                </thead>
+                <tbody id="components-body"></tbody>
+            </table>
+        </div>
+
+        <!-- Dependencies -->
+        <div class="card mb-2 hidden" id="dependencies-section">
+            <h2 class="mb-1">Dependencies</h2>
+            <div id="dependencies-list"></div>
         </div>
 
         <!-- Audit History -->
@@ -79,6 +106,11 @@
             <h2 class="mb-1">Current Security Posture</h2>
             <p id="posture-text" class="text-muted"></p>
             <div class="severity-summary mt-1" id="posture-severity"></div>
+        </div>
+
+        <!-- Delete Project -->
+        <div class="hidden mt-2" id="delete-section">
+            <button class="btn btn-sm" id="delete-project-btn" style="color: var(--error);">Delete Project</button>
         </div>
     </main>
 

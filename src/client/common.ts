@@ -158,6 +158,7 @@ interface AuthUser {
 }
 
 let currentUser: AuthUser | null = null;
+let authChecked = false;
 
 async function checkAuth(): Promise<AuthUser | null> {
   try {
@@ -166,6 +167,8 @@ async function checkAuth(): Promise<AuthUser | null> {
   } catch {
     currentUser = null;
     return null;
+  } finally {
+    authChecked = true;
   }
 }
 
@@ -188,6 +191,26 @@ function renderAuthStatus() {
   } else {
     el.innerHTML = `<a href="/auth/github">Sign in with GitHub</a>`;
   }
+}
+
+// ---------- Wait for Auth ----------
+
+function waitForAuth(): Promise<void> {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (authChecked) {
+        resolve();
+      } else {
+        setTimeout(check, 50);
+      }
+    };
+    // If already checked, resolve immediately
+    if (authChecked) {
+      resolve();
+    } else {
+      setTimeout(check, 50);
+    }
+  });
 }
 
 // ---------- Init ----------

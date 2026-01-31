@@ -20,8 +20,10 @@
   "type": "commonjs",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
+    "@types/minimatch": "^5.1.2",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
+    "minimatch": "^10.1.1",
     "pg": "^8.17.2",
     "simple-git": "^3.30.0",
     "uuid": "^13.0.0"

@@ -1,11 +1,13 @@
 import { Pool } from 'pg';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as crypto from 'crypto';
 import { callClaude, parseJsonResponse } from './claude';
-import { cloneOrUpdate, scanCodeFiles, readFileContent, getHeadSha, getDefaultBranchName, diffBetweenCommits } from './git';
+import { cloneOrUpdate, scanCodeFiles, readFileContent, getDefaultBranchName, diffBetweenCommits } from './git';
 import type { ScannedFile } from './git';
 import { roughTokenCount } from './tokens';
-import { createIssue } from './github';
+import { getCommitDate } from './github';
+import { runPlanningPhase } from './planning';
+import { loadPrompt, renderPrompt } from './prompts';
+import { minimatch } from 'minimatch';
 
 // ---------- Types ----------
 
@@ -50,6 +52,7 @@ interface AuditOptions {
   level: 'full' | 'thorough' | 'opportunistic';
   apiKey: string;
   baseAuditId?: string;
+  componentIds?: string[];
 }
 
 // Security-critical path patterns for thorough mode
@@ -61,27 +64,6 @@ const SECURITY_CRITICAL_PATTERNS = [
 ];
 
 const MAX_BATCH_TOKENS = 150000;
-
-// ---------- Prompt Loading ----------
-
-function loadPrompt(name: string): string {
-  const promptsDir = path.join(__dirname, '..', '..', '..', 'prompts');
-  let filePath = path.join(promptsDir, `${name}.md`);
-  if (!fs.existsSync(filePath)) {
-    // Try from source directory
-    const altDir = path.join(__dirname, '..', '..', 'prompts');
-    filePath = path.join(altDir, `${name}.md`);
-  }
-  return fs.readFileSync(filePath, 'utf-8');
-}
-
-function renderPrompt(template: string, vars: Record<string, string>): string {
-  let result = template;
-  for (const [key, value] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-  }
-  return result;
-}
 
 // ---------- Main Orchestrator ----------
 
@@ -111,8 +93,47 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       files: ScannedFile[];
     }> = [];
 
-    for (const repo of repos) {
-      const { localPath, headSha } = await cloneOrUpdate(repo.repo_url);
+    // Compute per-repo shallowSince for incremental audits
+    const shallowSinceMap: Map<string, Date> = new Map();
+    if (options.baseAuditId) {
+      try {
+        const { rows: baseCommits } = await pool.query(
+          `SELECT ac.commit_sha, r.repo_name, r.repo_url
+           FROM audit_commits ac
+           JOIN repositories r ON r.id = ac.repo_id
+           WHERE ac.audit_id = $1`,
+          [options.baseAuditId]
+        );
+        for (const bc of baseCommits) {
+          try {
+            const baseUrl = new URL(bc.repo_url);
+            const pathParts = baseUrl.pathname.replace(/^\//, '').replace(/\.git$/, '').split('/');
+            const owner = pathParts[0];
+            const repoName = pathParts[1];
+            const commitDate = await getCommitDate(owner, repoName, bc.commit_sha);
+            // Subtract 1 day buffer for timezone/force-push edge cases
+            shallowSinceMap.set(bc.repo_url, new Date(commitDate.getTime() - 24 * 60 * 60 * 1000));
+          } catch (err) {
+            console.warn(`[Audit ${auditId.substring(0, 8)}] Could not get commit date for ${bc.repo_name}, using full clone:`, (err as Error).message);
+          }
+        }
+      } catch (err) {
+        console.warn(`[Audit ${auditId.substring(0, 8)}] Could not query base commits, using full clone:`, (err as Error).message);
+      }
+    }
+
+    for (let repoIdx = 0; repoIdx < repos.length; repoIdx++) {
+      const repo = repos[repoIdx];
+
+      // Update clone progress
+      await pool.query(
+        `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
+        [JSON.stringify({ clone_progress: `Cloning ${repoIdx + 1}/${repos.length}: ${repo.repo_name}` }), auditId]
+      );
+      console.log(`[Audit ${auditId.substring(0, 8)}] Cloning ${repoIdx + 1}/${repos.length}: ${repo.repo_name}`);
+
+      const repoShallowSince = shallowSinceMap.get(repo.repo_url);
+      const { localPath, headSha } = await cloneOrUpdate(repo.repo_url, undefined, repoShallowSince);
       const branch = await getDefaultBranchName(localPath);
 
       // Record commit
@@ -139,7 +160,25 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       });
     }
 
-    const allFiles = repoData.flatMap(r => r.files);
+    let allFiles = repoData.flatMap(r => r.files);
+
+    // ---- Component-based file filtering ----
+    let componentPatterns: Array<{ componentId: string; patterns: string[] }> | null = null;
+    if (options.componentIds && options.componentIds.length > 0) {
+      const { rows: compRows } = await pool.query(
+        `SELECT id, file_patterns FROM components WHERE id = ANY($1) AND project_id = $2`,
+        [options.componentIds, projectId]
+      );
+      componentPatterns = compRows.map(c => ({ componentId: c.id, patterns: c.file_patterns }));
+      const allPatterns = compRows.flatMap(c => c.file_patterns as string[]);
+
+      if (allPatterns.length > 0) {
+        allFiles = allFiles.filter(f =>
+          allPatterns.some(pattern => minimatch(f.relativePath, pattern))
+        );
+        console.log(`[Audit ${auditId.substring(0, 8)}] Component filter: ${allFiles.length} files from ${options.componentIds.length} components`);
+      }
+    }
 
     // Update audit stats
     await pool.query(
@@ -149,7 +188,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
 
     // ---- Incremental: compute diff and inherit findings ----
     let filesToAnalyzeOverride: ScannedFile[] | null = null;
-    let inheritedFindingCount = 0;
+    // (inherited findings are inserted inline below)
 
     if (options.baseAuditId) {
       // Get base audit's commits per repo
@@ -181,7 +220,17 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
           continue;
         }
 
-        const diff = await diffBetweenCommits(repo.localPath, baseCommit.commit_sha, repo.headSha);
+        let diff;
+        try {
+          diff = await diffBetweenCommits(repo.localPath, baseCommit.commit_sha, repo.headSha);
+        } catch (diffErr) {
+          // Shallow clone may not contain the base SHA — treat all files as added
+          console.warn(`[Audit ${auditId.substring(0, 8)}] diff failed for ${repo.name} (base SHA may be outside shallow history), treating all files as changed:`, (diffErr as Error).message);
+          for (const f of repo.files) {
+            diffFilesAdded.push(f.relativePath);
+          }
+          continue;
+        }
 
         for (const f of diff.added) {
           diffFilesAdded.push(`${repo.name}/${f}`);
@@ -203,8 +252,8 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         [diffFilesAdded.length, diffFilesModified.length, diffFilesDeleted.length, auditId]
       );
 
-      // Only analyze added + modified files
-      const changedPaths = new Set([...diffFilesAdded, ...diffFilesModified]);
+      // Only analyze added + modified + renamed-to files
+      const changedPaths = new Set([...diffFilesAdded, ...diffFilesModified, ...renamedPaths.map(r => r.to)]);
       filesToAnalyzeOverride = allFiles.filter(f => changedPaths.has(f.relativePath));
 
       // Inherit open findings from base audit
@@ -220,12 +269,12 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         // Check if file was deleted
         if (diffFilesDeleted.includes(filePath)) {
           status = 'fixed';
-        }
-
-        // Check if file was renamed
-        const rename = renamedPaths.find(r => r.from === filePath);
-        if (rename) {
-          filePath = rename.to;
+        } else {
+          // Check if file was renamed (only if not deleted)
+          const rename = renamedPaths.find(r => r.from === filePath);
+          if (rename) {
+            filePath = rename.to;
+          }
         }
 
         // Insert inherited finding (with new audit ID)
@@ -243,7 +292,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
             finding.recommendation, finding.code_snippet, status,
           ]
         );
-        inheritedFindingCount++;
+        // finding inherited
       }
 
       // Mark base findings in deleted files as resolved in this audit
@@ -276,21 +325,76 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         'SELECT category, description, involved_parties, threat_model FROM projects WHERE id = $1',
         [projectId]
       );
-      classification = {
+      // Parse stored threat model from DB
+    let storedThreatModel: any = { parties: [] };
+    if (proj[0].threat_model) {
+      try {
+        const parsed = JSON.parse(proj[0].threat_model);
+        storedThreatModel = typeof parsed === 'object' && parsed !== null ? parsed : { generated: proj[0].threat_model, parties: [] };
+      } catch {
+        storedThreatModel = { generated: proj[0].threat_model, parties: [] };
+      }
+    }
+    classification = {
         category: proj[0].category,
         description: proj[0].description || '',
         involved_parties: proj[0].involved_parties || {},
         components: [],
-        threat_model_found: false,
+        threat_model_found: !!proj[0].threat_model,
         threat_model_files: [],
-        threat_model: { parties: [] },
+        threat_model: storedThreatModel,
       };
     }
 
-    // ---- Step 2: Select files for analysis ----
-    await updateStatus(pool, auditId, 'analyzing');
-    // For incremental audits, only analyze changed files; for fresh audits, apply level selection
-    const filesToAnalyze = filesToAnalyzeOverride || selectFiles(allFiles, level);
+    // ---- Step 2: Planning phase (smart file selection) ----
+    let filesToAnalyze: ScannedFile[];
+
+    if (filesToAnalyzeOverride) {
+      // Incremental audit: analyze only changed files, skip planning
+      await updateStatus(pool, auditId, 'analyzing');
+      filesToAnalyze = filesToAnalyzeOverride;
+    } else {
+      // Fresh audit: run planning phase for security-informed file selection
+      await updateStatus(pool, auditId, 'planning');
+      console.log(`[Audit ${auditId.substring(0, 8)}] Running planning phase...`);
+
+      // Load component profiles if available
+      const { rows: componentRows } = await pool.query(
+        `SELECT name, role, security_profile FROM components WHERE project_id = $1`,
+        [projectId]
+      );
+      const componentProfiles = componentRows.map(c => ({
+        name: c.name,
+        role: c.role || '',
+        securityProfile: c.security_profile || undefined,
+      }));
+
+      const { plan, planningCostUsd } = await runPlanningPhase(
+        pool, auditId, apiKey, allFiles,
+        repoData.map(r => ({ name: r.name, localPath: r.localPath })),
+        level,
+        {
+          category: classification.category,
+          description: classification.description,
+          threat_model: classification.threat_model,
+        },
+        componentProfiles,
+      );
+      actualCostUsd += planningCostUsd;
+
+      console.log(`[Audit ${auditId.substring(0, 8)}] Planning complete: ${plan.length} files selected`);
+
+      // Use planned files to filter allFiles (preserving ScannedFile objects)
+      const plannedFileSet = new Set(plan.map(p => p.file));
+      filesToAnalyze = allFiles.filter(f => plannedFileSet.has(f.relativePath));
+
+      // Fallback: if planning returned no files, use old heuristic
+      if (filesToAnalyze.length === 0) {
+        filesToAnalyze = selectFiles(allFiles, level);
+      }
+
+      await updateStatus(pool, auditId, 'analyzing');
+    }
 
     await pool.query(
       `UPDATE audits SET files_to_analyze = $1, tokens_to_analyze = $2 WHERE id = $3`,
@@ -309,7 +413,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     );
 
     // ---- Step 3: Batch and analyze ----
-    const batches = createBatches(filesToAnalyze, repoData);
+    const batches = createBatches(filesToAnalyze);
     const systemPrompt = buildSystemPrompt(classification, level);
     let totalFindings = 0;
     let batchesSucceeded = 0;
@@ -442,6 +546,51 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       return;
     }
 
+    // ---- Step 3b: Finding-to-component attribution ----
+    if (componentPatterns && componentPatterns.length > 0) {
+      // Attribute findings to components based on file_path matching component patterns
+      const { rows: auditFindings } = await pool.query(
+        `SELECT id, file_path FROM audit_findings WHERE audit_id = $1`,
+        [auditId]
+      );
+
+      const componentFindingCounts: Map<string, number> = new Map();
+      const componentTokenCounts: Map<string, number> = new Map();
+
+      // Pre-compute token counts per component from analyzed files
+      for (const comp of componentPatterns) {
+        const matchingTokens = filesToAnalyze
+          .filter(f => comp.patterns.some(p => minimatch(f.relativePath, p)))
+          .reduce((sum, f) => sum + f.roughTokens, 0);
+        componentTokenCounts.set(comp.componentId, matchingTokens);
+        componentFindingCounts.set(comp.componentId, 0);
+      }
+
+      for (const finding of auditFindings) {
+        for (const comp of componentPatterns) {
+          if (comp.patterns.some(p => minimatch(finding.file_path, p))) {
+            await pool.query(
+              `UPDATE audit_findings SET component_id = $1 WHERE id = $2`,
+              [comp.componentId, finding.id]
+            );
+            componentFindingCounts.set(comp.componentId, (componentFindingCounts.get(comp.componentId) || 0) + 1);
+            break; // First matching component wins
+          }
+        }
+      }
+
+      // Insert audit_components records
+      for (const comp of componentPatterns) {
+        await pool.query(
+          `INSERT INTO audit_components (audit_id, component_id, tokens_analyzed, findings_count)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (audit_id, component_id) DO UPDATE SET
+             tokens_analyzed = EXCLUDED.tokens_analyzed, findings_count = EXCLUDED.findings_count`,
+          [auditId, comp.componentId, componentTokenCounts.get(comp.componentId) || 0, componentFindingCounts.get(comp.componentId) || 0]
+        );
+      }
+    }
+
     // ---- Step 4: Synthesis ----
     await updateStatus(pool, auditId, 'synthesizing');
     console.log(`[Audit ${auditId.substring(0, 8)}] Synthesizing report from ${totalFindings} findings...`);
@@ -451,20 +600,16 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       [auditId]
     );
 
-    const synthesisPrompt = `Synthesize the following security audit findings into an executive summary and overall security posture assessment.
+    const findingsSummary = allFindings
+      .map(f => `- [${f.severity}] ${f.title} in ${f.file_path}: ${f.description.substring(0, 100)}`)
+      .join('\n');
 
-Project: ${classification.description || 'Unknown'}
-Category: ${classification.category || 'Unknown'}
-Total findings: ${allFindings.length}
-
-Findings summary:
-${allFindings.map(f => `- [${f.severity}] ${f.title} in ${f.file_path}: ${f.description.substring(0, 100)}`).join('\n')}
-
-Return JSON: {
-  "executive_summary": "2-3 paragraph executive summary",
-  "security_posture": "overall security assessment paragraph",
-  "responsible_disclosure": { "contact": "...", "policy": "..." }
-}`;
+    const synthesisPrompt = renderPrompt(loadPrompt('synthesize'), {
+      description: classification.description || 'Unknown',
+      category: classification.category || 'Unknown',
+      totalFindings: String(allFindings.length),
+      findingsSummary,
+    });
 
     try {
       const synthResponse = await callClaude(apiKey, 'You are a security audit report writer. Return valid JSON only.', synthesisPrompt);
@@ -475,17 +620,11 @@ Return JSON: {
       const severityOrder = ['critical', 'high', 'medium', 'low', 'informational', 'none'];
       let maxSev = 'none';
       for (const f of allFindings) {
-        if (severityOrder.indexOf(f.severity) < severityOrder.indexOf(maxSev)) {
-          maxSev = f.severity;
+        const fIdx = severityOrder.indexOf(f.severity?.toLowerCase());
+        const mIdx = severityOrder.indexOf(maxSev);
+        if (fIdx !== -1 && fIdx < mIdx) {
+          maxSev = severityOrder[fIdx];
         }
-      }
-
-      // Compute publishable_after based on severity
-      let publishableAfter = null;
-      if (maxSev === 'critical') {
-        publishableAfter = new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000); // 6 months
-      } else if (maxSev === 'high' || maxSev === 'medium') {
-        publishableAfter = new Date(Date.now() + 3 * 30 * 24 * 60 * 60 * 1000); // 3 months
       }
 
       await pool.query(
@@ -493,21 +632,16 @@ Return JSON: {
           report_summary = $1,
           max_severity = $2,
           actual_cost_usd = $3,
-          publishable_after = $4,
           status = 'completed',
           completed_at = NOW()
-         WHERE id = $5`,
+         WHERE id = $4`,
         [
           JSON.stringify(synthesis),
           maxSev,
           actualCostUsd,
-          publishableAfter,
           auditId,
         ]
       );
-
-      // ---- Step 5: Notify owner if non-owner audit ----
-      await notifyOwnerIfNeeded(pool, auditId, projectId, allFindings.length, maxSev);
     } catch (err) {
       console.error('Synthesis error:', err);
       // Complete without synthesis
@@ -618,7 +752,6 @@ interface Batch {
 
 function createBatches(
   files: ScannedFile[],
-  repoData: Array<{ name: string; localPath: string }>
 ): Batch[] {
   // Sort by directory to keep related code together
   const sorted = [...files].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
@@ -669,16 +802,9 @@ async function updateStatus(pool: Pool, auditId: string, status: string): Promis
 }
 
 function generateFingerprint(finding: FindingResult): string {
-  // Simple fingerprint for dedup across incremental audits
+  // SHA-256 based fingerprint for dedup across incremental audits
   const raw = `${finding.file}:${finding.title}:${finding.code_snippet?.substring(0, 100) || ''}`;
-  // Use a simple hash
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) {
-    const char = raw.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(36);
+  return crypto.createHash('sha256').update(raw).digest('hex').substring(0, 16);
 }
 
 function estimateCallCost(inputTokens: number, outputTokens: number): number {
@@ -686,63 +812,3 @@ function estimateCallCost(inputTokens: number, outputTokens: number): number {
   return (inputTokens / 1_000_000) * 5 + (outputTokens / 1_000_000) * 25;
 }
 
-// ---------- Owner Notification ----------
-
-async function notifyOwnerIfNeeded(
-  pool: Pool,
-  auditId: string,
-  projectId: string,
-  findingsCount: number,
-  maxSeverity: string,
-): Promise<void> {
-  try {
-    // Get audit and project info
-    const { rows } = await pool.query(
-      `SELECT a.is_owner, a.requester_id, p.github_org, p.name as project_name,
-              s.github_token
-       FROM audits a
-       JOIN projects p ON p.id = a.project_id
-       LEFT JOIN sessions s ON s.user_id = a.requester_id AND s.expires_at > NOW()
-       WHERE a.id = $1`,
-      [auditId]
-    );
-
-    if (rows.length === 0 || rows[0].is_owner) return; // Owner ran it, no notification needed
-
-    const { github_org, project_name, github_token } = rows[0];
-    if (!github_token) return; // Can't create issue without token
-
-    // Find the first repo in the project (for issue creation)
-    const { rows: repoRows } = await pool.query(
-      `SELECT r.repo_name FROM repositories r
-       JOIN project_repos pr ON pr.repo_id = r.id
-       WHERE pr.project_id = $1
-       ORDER BY r.stars DESC NULLS LAST
-       LIMIT 1`,
-      [projectId]
-    );
-    if (repoRows.length === 0) return;
-
-    const repoName = repoRows[0].repo_name;
-    const title = `[CodeWatch] Security audit completed - ${findingsCount} finding${findingsCount !== 1 ? 's' : ''} (max: ${maxSeverity})`;
-    const body = `A community member has run a security audit on **${project_name}** using [CodeWatch](https://codewatch.dev).
-
-**Results:**
-- Total findings: ${findingsCount}
-- Maximum severity: ${maxSeverity}
-- Audit ID: \`${auditId}\`
-
-As the project owner, you have full access to all findings. Visit CodeWatch to view the complete report, add comments, and publish the report when ready.
-
----
-*This issue was automatically created by CodeWatch. The audit was sponsored by a community member to improve this project's security.*`;
-
-    await createIssue(github_token, github_org, repoName, title, body);
-
-    // Mark owner as notified
-    await pool.query('UPDATE audits SET owner_notified = TRUE WHERE id = $1', [auditId]);
-  } catch (err) {
-    // Non-critical: log but don't fail the audit
-    console.error('Failed to notify owner:', err);
-  }
-}

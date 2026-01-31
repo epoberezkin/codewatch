@@ -5,7 +5,7 @@ import { createTestSession, authenticatedFetch } from '../helpers';
 // Mock GitHub and git services
 vi.mock('../../src/server/services/github', () => ({
   getOAuthUrl: () => 'https://github.com/login/oauth/authorize?client_id=test',
-  exchangeCodeForToken: async () => 'mock-token',
+  exchangeCodeForToken: async () => ({ accessToken: 'mock-token', scope: 'read:org' }),
   getAuthenticatedUser: async () => ({
     id: 12345, login: 'testuser', type: 'User',
     avatar_url: 'https://avatars.githubusercontent.com/u/12345',
@@ -24,7 +24,8 @@ vi.mock('../../src/server/services/github', () => ({
       license: { spdx_id: 'Apache-2.0' }, html_url: 'https://github.com/test-org/repo-beta',
     },
   ],
-  isOrgMember: async () => true,
+  getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
+  checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
 }));
 

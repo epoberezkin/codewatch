@@ -1,6 +1,6 @@
 // ============================================================
 // CodeWatch - Cost Estimation Page (estimate.html)
-// Shows cost cards for 3 levels, precise estimate, API key input
+// Shows cost cards for 3 levels, component analysis, API key input
 // ============================================================
 
 interface EstimateData {
@@ -12,7 +12,6 @@ interface EstimateData {
     thorough: { files: number; tokens: number; costUsd: number };
     opportunistic: { files: number; tokens: number; costUsd: number };
   };
-  latestCommits: Array<{ repoId: string; commitSha: string; branch: string }>;
   previousAudit?: { id: string; createdAt: string; level: string; maxSeverity: string };
   isPrecise: boolean;
   cloneErrors?: Array<{ repoName: string; error: string }>;
@@ -28,6 +27,28 @@ interface ProjectData {
   repos: Array<{ repoName: string; language: string; stars: number }>;
 }
 
+interface ComponentItem {
+  id: string;
+  name: string;
+  description: string;
+  role: string;
+  repoName: string;
+  filePatterns: string[];
+  languages: string[];
+  securityProfile: { summary?: string; threat_surface?: string[] } | null;
+  estimatedFiles: number;
+  estimatedTokens: number;
+}
+
+interface AnalysisStatus {
+  id: string;
+  status: string;
+  turnsUsed: number;
+  maxTurns: number;
+  costUsd: number;
+  errorMessage: string | null;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const projectId = getParam('projectId');
   if (!projectId) {
@@ -35,10 +56,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Wait for auth check to complete before reading currentUser
+  await waitForAuth();
+
   let selectedLevel: string | null = null;
   let estimateData: EstimateData | null = null;
   let useIncremental = false;
   let baseAuditId: string | null = null;
+  let selectedComponentIds: string[] = [];
+  let components: ComponentItem[] = [];
 
   // Load project info and estimate in parallel
   try {
@@ -68,6 +94,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const user = currentUser;
     if (user && project.createdBy && user.id !== project.createdBy) {
       show('non-owner-notice');
+    }
+
+    // Show component section if user is logged in
+    if (user) {
+      show('component-section');
+      // Check for existing components
+      await loadExistingComponents();
     }
   } catch (err) {
     setHtml('header-loading', `<div class="notice notice-error">${escapeHtml(err instanceof Error ? err.message : 'Failed to load')}</div>`);
@@ -104,6 +137,144 @@ document.addEventListener('DOMContentLoaded', async () => {
       hide('precise-btn');
     }
   }
+
+  async function loadExistingComponents() {
+    try {
+      const comps = await apiFetch<ComponentItem[]>(`/api/projects/${projectId}/components`);
+      if (comps.length > 0) {
+        components = comps;
+        selectedComponentIds = comps.map(c => c.id);
+        renderComponentTable(comps);
+        hide('component-not-analyzed');
+        show('component-table-container');
+      }
+    } catch {
+      // No components yet, that's fine
+    }
+  }
+
+  function renderComponentTable(comps: ComponentItem[]) {
+    const tbody = $('component-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = comps.map(c => `
+      <tr>
+        <td><input type="checkbox" class="component-checkbox" data-id="${c.id}" checked></td>
+        <td><strong>${escapeHtml(c.name)}</strong><br><small class="text-muted">${escapeHtml(c.description.substring(0, 80))}</small></td>
+        <td>${escapeHtml(c.repoName)}</td>
+        <td>${escapeHtml(c.role || '--')}</td>
+        <td>${formatNumber(c.estimatedFiles)}</td>
+        <td>${formatNumber(c.estimatedTokens)}</td>
+        <td>${c.securityProfile?.summary ? `<small>${escapeHtml(c.securityProfile.summary.substring(0, 60))}</small>` : '--'}</td>
+      </tr>
+    `).join('');
+
+    // Attach checkbox listeners
+    document.querySelectorAll<HTMLInputElement>('.component-checkbox').forEach(cb => {
+      cb.addEventListener('change', onComponentSelectionChange);
+    });
+
+    // Replace select-all element to remove any accumulated listeners from prior renders
+    const oldSelectAll = $('select-all-components') as HTMLInputElement | null;
+    if (oldSelectAll) {
+      const selectAll = oldSelectAll.cloneNode(true) as HTMLInputElement;
+      oldSelectAll.replaceWith(selectAll);
+      selectAll.addEventListener('change', () => {
+        const checked = selectAll.checked;
+        document.querySelectorAll<HTMLInputElement>('.component-checkbox').forEach(cb => {
+          cb.checked = checked;
+        });
+        onComponentSelectionChange();
+      });
+    }
+
+    updateScopedEstimate();
+  }
+
+  async function onComponentSelectionChange() {
+    const checkboxes = document.querySelectorAll<HTMLInputElement>('.component-checkbox');
+    selectedComponentIds = [];
+    checkboxes.forEach(cb => {
+      if (cb.checked) selectedComponentIds.push(cb.dataset.id!);
+    });
+    await updateScopedEstimate();
+    updateStartButton();
+  }
+
+  async function updateScopedEstimate() {
+    if (selectedComponentIds.length === 0) {
+      setText('scoped-estimate-label', 'No components selected');
+      return;
+    }
+
+    try {
+      const scoped = await apiPost<EstimateData>('/api/estimate/components', {
+        projectId,
+        componentIds: selectedComponentIds,
+      });
+      renderEstimate(scoped);
+      estimateData = scoped;
+      setText('scoped-estimate-label',
+        `${selectedComponentIds.length} of ${components.length} components selected ` +
+        `(${formatNumber(scoped.totalFiles)} files, ${formatNumber(scoped.totalTokens)} tokens)`);
+    } catch {
+      setText('scoped-estimate-label', 'Failed to update estimate');
+    }
+  }
+
+  // Component analysis
+  const analysisKeyInput = $('analysis-api-key') as HTMLInputElement | null;
+  const analyzeBtn = $('analyze-components-btn') as HTMLButtonElement | null;
+
+  analysisKeyInput?.addEventListener('input', () => {
+    if (analyzeBtn) {
+      analyzeBtn.disabled = !analysisKeyInput.value.trim().startsWith('sk-ant-');
+    }
+  });
+
+  analyzeBtn?.addEventListener('click', async () => {
+    const apiKey = analysisKeyInput?.value.trim();
+    if (!apiKey || !apiKey.startsWith('sk-ant-')) return;
+
+    analyzeBtn.disabled = true;
+    hide('component-not-analyzed');
+    show('component-analyzing');
+
+    try {
+      const { analysisId } = await apiPost<{ analysisId: string }>(
+        `/api/projects/${projectId}/analyze-components`,
+        { apiKey }
+      );
+
+      // Poll for completion
+      const poll = async () => {
+        const status = await apiFetch<AnalysisStatus>(
+          `/api/projects/${projectId}/component-analysis/${analysisId}`
+        );
+        setText('analysis-progress',
+          `Analyzing... Turn ${status.turnsUsed}/${status.maxTurns} (~${formatUSD(status.costUsd)})`);
+
+        if (status.status === 'completed') {
+          hide('component-analyzing');
+          await loadExistingComponents();
+          show('component-table-container');
+        } else if (status.status === 'failed') {
+          hide('component-analyzing');
+          show('component-not-analyzed');
+          alert('Component analysis failed: ' + (status.errorMessage || 'Unknown error'));
+          analyzeBtn.disabled = false;
+        } else {
+          setTimeout(poll, 2000);
+        }
+      };
+      setTimeout(poll, 2000);
+    } catch (err) {
+      hide('component-analyzing');
+      show('component-not-analyzed');
+      analyzeBtn.disabled = false;
+      alert(err instanceof Error ? err.message : 'Failed to start analysis');
+    }
+  });
 
   // Level selection
   const cards = document.querySelectorAll<HTMLElement>('.estimate-card');
@@ -167,7 +338,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       const est = estimateData?.estimates[selectedLevel as keyof EstimateData['estimates']];
       const prefix = useIncremental ? 'Start incremental ' : 'Start ';
-      btn.textContent = `${prefix}${selectedLevel} audit${est ? ` (~${formatUSD(est.costUsd)})` : ''}`;
+      const compLabel = selectedComponentIds.length > 0 && selectedComponentIds.length < components.length
+        ? ` (${selectedComponentIds.length} components)` : '';
+      btn.textContent = `${prefix}${selectedLevel} audit${compLabel}${est ? ` (~${formatUSD(est.costUsd)})` : ''}`;
     }
   }
 
@@ -179,13 +352,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     startBtn.textContent = 'Starting audit...';
 
     try {
-      const body: Record<string, string> = {
+      const body: Record<string, any> = {
         projectId,
         level: selectedLevel,
         apiKey: apiKeyInput.value.trim(),
       };
       if (useIncremental && baseAuditId) {
         body.baseAuditId = baseAuditId;
+      }
+      if (selectedComponentIds.length > 0 && selectedComponentIds.length < components.length) {
+        body.componentIds = selectedComponentIds;
       }
       const result = await apiPost<{ auditId: string }>('/api/audit/start', body);
       window.location.href = `/audit.html?auditId=${result.auditId}`;

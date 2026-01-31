@@ -82,10 +82,15 @@ const mockData = vi.hoisted(() => ({
   },
 }));
 
+// Hoisted mutable state for ownership mock
+const mockOwnershipState = vi.hoisted(() => ({
+  ownerUserIds: new Set<string>(),
+}));
+
 // Mock GitHub service
 vi.mock('../../src/server/services/github', () => ({
   getOAuthUrl: () => 'https://github.com/login/oauth/authorize?client_id=test',
-  exchangeCodeForToken: async () => 'mock-token',
+  exchangeCodeForToken: async () => ({ accessToken: 'mock-token', scope: 'read:org' }),
   getAuthenticatedUser: async () => ({
     id: 12345, login: 'testuser', type: 'User',
     avatar_url: 'https://avatars.githubusercontent.com/u/12345',
@@ -98,8 +103,19 @@ vi.mock('../../src/server/services/github', () => ({
       license: { spdx_id: 'MIT' }, html_url: 'https://github.com/test-org/repo-alpha',
     },
   ],
-  isOrgMember: async () => true,
+  getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
+  checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
+  getCommitDate: async () => new Date('2025-01-15T12:00:00Z'),
+}));
+
+// Mock ownership service — uses hoisted state to control per-test ownership
+vi.mock('../../src/server/services/ownership', () => ({
+  resolveOwnership: async (_pool: any, userId: string) => ({
+    isOwner: mockOwnershipState.ownerUserIds.has(userId),
+    cached: false,
+  }),
+  invalidateOwnershipCache: async () => {},
 }));
 
 // Mock git service
@@ -154,6 +170,20 @@ vi.mock('../../src/server/services/claude', () => ({
         outputTokens: 500,
       };
     }
+    if (systemPrompt.includes('audit planner')) {
+      // Planning phase: return ranked file list matching scanned files
+      return {
+        content: JSON.stringify([
+          { file: 'repo-alpha/src/index.js', priority: 9, reason: 'SQL injection risk' },
+          { file: 'repo-alpha/src/auth.js', priority: 8, reason: 'Password handling' },
+          { file: 'repo-alpha/src/utils.py', priority: 7, reason: 'OS command execution' },
+          { file: 'repo-alpha/config.json', priority: 3, reason: 'Configuration' },
+          { file: 'repo-alpha/package.json', priority: 2, reason: 'Dependencies' },
+        ]),
+        inputTokens: 800,
+        outputTokens: 300,
+      };
+    }
     if (systemPrompt.includes('report writer')) {
       return {
         content: JSON.stringify(mockData.synthesisResponse),
@@ -197,10 +227,12 @@ describe('Audit API', () => {
 
   beforeEach(async () => {
     await truncateAllTables(ctx.pool);
+    mockOwnershipState.ownerUserIds.clear();
   });
 
-  // Helper to create a project for testing
-  async function createProject(session: { cookie: string }): Promise<string> {
+  // Helper to create a project for testing — registers session as owner
+  async function createProject(session: { cookie: string; userId: string }): Promise<string> {
+    mockOwnershipState.ownerUserIds.add(session.userId);
     const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -345,22 +377,19 @@ describe('Audit API', () => {
       expect(commits[0].branch).toBe('main');
     });
 
-    it('sets publishable_after for critical findings', async () => {
+    it('publishable_after is NULL at completion (set via notify-owner)', async () => {
       const session = await createTestSession(ctx.pool);
       const projectId = await createProject(session);
       const auditId = await runFullAudit(session, projectId);
 
       const { rows } = await ctx.pool.query(
-        'SELECT publishable_after FROM audits WHERE id = $1',
+        'SELECT publishable_after, owner_notified FROM audits WHERE id = $1',
         [auditId]
       );
-      // Critical findings → 6-month delay
-      expect(rows[0].publishable_after).not.toBeNull();
-      const publishDate = new Date(rows[0].publishable_after);
-      const now = new Date();
-      const monthsDiff = (publishDate.getTime() - now.getTime()) / (30 * 24 * 60 * 60 * 1000);
-      expect(monthsDiff).toBeGreaterThan(5);
-      expect(monthsDiff).toBeLessThan(7);
+      // Phase 3: publishable_after is no longer set at completion
+      // It is set when the requester triggers notify-owner
+      expect(rows[0].publishable_after).toBeNull();
+      expect(rows[0].owner_notified).toBe(false);
     });
 
     it('skips classification on second audit if already classified', async () => {
@@ -470,6 +499,80 @@ describe('Audit API', () => {
       expect(report.redactedSeverities).toContain('critical');
       // Severity counts are still visible
       expect(report.severityCounts.critical).toBe(1);
+    });
+
+    it('report includes category and projectDescription from classification', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await runFullAudit(session, projectId);
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/audit/${auditId}/report`,
+        session.cookie,
+      );
+      const report = await res.json();
+      expect(report.category).toBe('client_server');
+      expect(report.projectDescription).toContain('web application');
+    });
+
+    it('report includes involvedParties from classification', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await runFullAudit(session, projectId);
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/audit/${auditId}/report`,
+        session.cookie,
+      );
+      const report = await res.json();
+      expect(report.involvedParties).toBeDefined();
+      expect(report.involvedParties.vendor).toBe('test-org');
+      expect(report.involvedParties.operators).toContain('server operators');
+    });
+
+    it('report includes threatModel and threatModelSource from classification', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await runFullAudit(session, projectId);
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/audit/${auditId}/report`,
+        session.cookie,
+      );
+      const report = await res.json();
+      expect(report.threatModel).toBeDefined();
+      expect(report.threatModel).toContain('Server operators');
+      expect(report.threatModelSource).toBe('generated');
+    });
+
+    it('report includes executive_summary and security_posture in reportSummary', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await runFullAudit(session, projectId);
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/audit/${auditId}/report`,
+        session.cookie,
+      );
+      const report = await res.json();
+      expect(report.reportSummary).toBeDefined();
+      expect(report.reportSummary.executive_summary).toBe('The security audit revealed critical vulnerabilities.');
+      expect(report.reportSummary.security_posture).toBe('The application security posture is poor.');
+      expect(report.reportSummary.responsible_disclosure).toBeDefined();
+    });
+
+    it('report includes classification fields as null for non-owner (public tier)', async () => {
+      const ownerSession = await createTestSession(ctx.pool);
+      const projectId = await createProject(ownerSession);
+      const auditId = await runFullAudit(ownerSession, projectId);
+
+      // Anonymous user views report — still gets classification data (it's project-level, not redacted)
+      const res = await fetch(`${ctx.baseUrl}/api/audit/${auditId}/report`);
+      const report = await res.json();
+      // Classification fields are included for all access tiers
+      expect(report.category).toBe('client_server');
+      expect(report.threatModelSource).toBe('generated');
+      expect(report.involvedParties).toBeDefined();
     });
 
     it('shows all findings for non-owner when report is public', async () => {

@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!repoList || !orgNameEl || !step2 || !step3) return;
 
     setText('org-name', detectedOrg);
+    selectedRepos.clear(); // Clear stale selections from previous org
     repoList.innerHTML = '';
 
     repos.forEach((repo) => {
@@ -139,7 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStep3();
   });
 
-  function updateStep3() {
+  async function updateStep3() {
+    await waitForAuth();
     const hasSelection = selectedRepos.size > 0;
     const isLoggedIn = !!currentUser;
 

@@ -107,15 +107,38 @@ export async function countTokens(
   userMessage: string,
   model: string = 'claude-opus-4-5-20251101',
 ): Promise<number> {
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, maxRetries: 0 });
 
-  const result = await client.messages.countTokens({
-    model,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await client.messages.countTokens({
+        model,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      });
+      return result.input_tokens;
+    } catch (err: unknown) {
+      const status = (err as any)?.status;
+      const isRateLimit = status === 429;
+      const isServerError = status >= 500 && status < 600;
 
-  return result.input_tokens;
+      if ((!isRateLimit && !isServerError) || attempt === MAX_RETRIES) {
+        throw err;
+      }
+
+      const waitSeconds = isRateLimit
+        ? getRetryAfterSeconds(err) + 5
+        : Math.min(10 * Math.pow(2, attempt), 120);
+
+      console.log(
+        `[countTokens] ${isRateLimit ? 'Rate limited' : `Server error (${status})`}. ` +
+        `Waiting ${waitSeconds}s before retry ${attempt + 1}/${MAX_RETRIES}...`
+      );
+      await sleep(waitSeconds * 1000);
+    }
+  }
+
+  throw new Error('Exhausted all retries calling countTokens');
 }
 
 /**

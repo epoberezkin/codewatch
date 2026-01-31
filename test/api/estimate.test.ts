@@ -5,13 +5,14 @@ import { createTestSession, authenticatedFetch } from '../helpers';
 // Mock GitHub and git services
 vi.mock('../../src/server/services/github', () => ({
   getOAuthUrl: () => 'https://github.com/login/oauth/authorize?client_id=test',
-  exchangeCodeForToken: async () => 'mock-token',
+  exchangeCodeForToken: async () => ({ accessToken: 'mock-token', scope: 'read:org' }),
   getAuthenticatedUser: async () => ({
     id: 12345, login: 'testuser', type: 'User',
     avatar_url: 'https://avatars.githubusercontent.com/u/12345',
   }),
   listOrgRepos: async () => [],
-  isOrgMember: async () => true,
+  getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
+  checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
 }));
 
@@ -124,6 +125,32 @@ describe('Estimation API', () => {
       );
       expect(rows[0].total_files).toBe(6);
       expect(rows[0].total_tokens).toBe(6800);
+    });
+
+    it('cost estimates include planning overhead', async () => {
+      const projectId = await createProject();
+
+      const res = await fetch(`${ctx.baseUrl}/api/estimate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      });
+      const data = await res.json();
+
+      // Planning uses Sonnet 4.5 ($3/$15 per Mtok) on total tokens (6800)
+      // planInput = round(6800*0.05) + 3000 = 3340
+      // planOutput = max(50, round(6800/300)*50) = max(50, 1150) = 1150
+      // planningCost ≈ (3340/1M)*3 + (1150/1M)*15 ≈ 0.0273
+      // This overhead is the same for all levels (planning always covers all files)
+
+      // Verify planning overhead makes opportunistic cost > 0.02
+      // (without planning, opportunistic on 680 tokens would cost ~0.01)
+      expect(data.estimates.opportunistic.costUsd).toBeGreaterThan(0.02);
+
+      // Verify all levels still maintain correct ordering
+      // (full > thorough > opportunistic, since analysis cost varies but planning is constant)
+      expect(data.estimates.full.costUsd).toBeGreaterThan(data.estimates.thorough.costUsd);
+      expect(data.estimates.thorough.costUsd).toBeGreaterThan(data.estimates.opportunistic.costUsd);
     });
 
     it('returns previousAudit when one exists', async () => {

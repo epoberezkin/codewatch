@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
       completed: 'badge-completed',
       failed: 'badge-failed',
     };
-    setHtml('audit-status-badge', `<span class="badge ${statusMap[data.status] || ''}">${data.status}</span>`);
+    setHtml('audit-status-badge', `<span class="badge ${statusMap[data.status] || ''}">${escapeHtml(data.status)}</span>`);
     setText('audit-level', data.auditLevel);
 
     // Commit info
@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     list.innerHTML = files.map(f => `
       <li class="file-item">
-        <span class="file-status file-status-${f.status}">${statusIcons[f.status] || ''}</span>
+        <span class="file-status file-status-${escapeHtml(f.status)}">${statusIcons[f.status] || ''}</span>
         <span class="file-name">${escapeHtml(f.file)}</span>
         ${f.findingsCount > 0 ? `<span class="file-findings">${f.findingsCount} finding${f.findingsCount !== 1 ? 's' : ''}</span>` : ''}
       </li>

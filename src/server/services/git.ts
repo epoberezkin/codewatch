@@ -52,26 +52,46 @@ export function repoLocalPath(repoUrl: string): string {
   return path.join(config.reposDir, url.hostname, url.pathname.replace(/^\//, '').replace(/\.git$/, ''));
 }
 
-export async function cloneOrUpdate(repoUrl: string, branch?: string): Promise<{ localPath: string; headSha: string }> {
+export async function cloneOrUpdate(
+  repoUrl: string,
+  branch?: string,
+  shallowSince?: Date,
+): Promise<{ localPath: string; headSha: string }> {
   const localPath = repoLocalPath(repoUrl);
 
   if (fs.existsSync(path.join(localPath, '.git'))) {
     // Update existing
     const git = simpleGit(localPath);
-    await git.fetch('origin');
+    if (shallowSince) {
+      // Incremental: deepen just enough to include the base commit
+      const sinceStr = shallowSince.toISOString().split('T')[0]; // YYYY-MM-DD
+      await git.fetch(['origin', `--shallow-since=${sinceStr}`]);
+    } else {
+      await git.fetch('origin');
+    }
     const targetBranch = branch || await getDefaultBranch(git);
     await git.checkout(targetBranch);
     await git.pull('origin', targetBranch);
     const log = await git.log({ maxCount: 1 });
-    return { localPath, headSha: log.latest!.hash };
+    if (!log.latest) throw new Error(`Repository at ${repoUrl} has no commits`);
+    return { localPath, headSha: log.latest.hash };
   } else {
     // Clone fresh
     fs.mkdirSync(localPath, { recursive: true });
     const git = simpleGit();
-    await git.clone(repoUrl, localPath, ['--single-branch']);
+    const cloneArgs = ['--single-branch'];
+    if (shallowSince) {
+      // Incremental clone of a repo we don't have on disk yet
+      const sinceStr = shallowSince.toISOString().split('T')[0];
+      cloneArgs.push(`--shallow-since=${sinceStr}`);
+    } else {
+      cloneArgs.push('--depth', '1');
+    }
+    await git.clone(repoUrl, localPath, cloneArgs);
     const localGit = simpleGit(localPath);
     const log = await localGit.log({ maxCount: 1 });
-    return { localPath, headSha: log.latest!.hash };
+    if (!log.latest) throw new Error(`Repository at ${repoUrl} has no commits after clone`);
+    return { localPath, headSha: log.latest.hash };
   }
 }
 
@@ -140,7 +160,6 @@ export async function diffBetweenCommits(
   headSha: string
 ): Promise<DiffResult> {
   const git = simpleGit(repoPath);
-  const diff = await git.diffSummary([baseSha, headSha]);
 
   const result: DiffResult = {
     added: [],
@@ -175,7 +194,9 @@ export async function diffBetweenCommits(
 
 export function readFileContent(repoPath: string, relativePath: string): string | null {
   try {
-    const fullPath = path.join(repoPath, relativePath);
+    const fullPath = path.resolve(path.join(repoPath, relativePath));
+    // Prevent path traversal outside the repository root
+    if (!fullPath.startsWith(path.resolve(repoPath))) return null;
     return fs.readFileSync(fullPath, 'utf-8');
   } catch {
     return null;
@@ -187,7 +208,8 @@ export function readFileContent(repoPath: string, relativePath: string): string 
 export async function getHeadSha(repoPath: string): Promise<string> {
   const git = simpleGit(repoPath);
   const log = await git.log({ maxCount: 1 });
-  return log.latest!.hash;
+  if (!log.latest) throw new Error(`Repository at ${repoPath} has no commits`);
+  return log.latest.hash;
 }
 
 export async function getDefaultBranchName(repoPath: string): Promise<string> {

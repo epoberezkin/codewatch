@@ -3,10 +3,15 @@ import { TestContext, startTestServer, teardownTestServer, truncateAllTables } f
 import { createTestUser, createTestSession, authenticatedFetch } from '../helpers';
 import { testGitHubUser } from '../mocks/github';
 
+// Hoisted mutable state for configurable token scope
+const mockAuthState = vi.hoisted(() => ({
+  tokenScope: 'read:org',
+}));
+
 // Mock the github service module before importing anything that uses it
 vi.mock('../../src/server/services/github', () => ({
-  getOAuthUrl: () => 'https://github.com/login/oauth/authorize?client_id=test',
-  exchangeCodeForToken: async (_code: string) => 'mock-github-token-abc123',
+  getOAuthUrl: (state?: string) => `https://github.com/login/oauth/authorize?client_id=test&scope=read%3Aorg${state ? `&state=${state}` : ''}`,
+  exchangeCodeForToken: async (_code: string) => ({ accessToken: 'mock-github-token-abc123', scope: mockAuthState.tokenScope }),
   getAuthenticatedUser: async (_token: string) => ({
     id: 12345,
     login: 'testuser',
@@ -14,8 +19,14 @@ vi.mock('../../src/server/services/github', () => ({
     avatar_url: 'https://avatars.githubusercontent.com/u/12345',
   }),
   listOrgRepos: async () => [],
-  isOrgMember: async () => false,
+  getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
+  checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
+}));
+
+vi.mock('../../src/server/services/ownership', () => ({
+  resolveOwnership: async () => ({ isOwner: true, cached: false }),
+  invalidateOwnershipCache: async () => {},
 }));
 
 describe('Auth API', () => {
@@ -31,6 +42,7 @@ describe('Auth API', () => {
 
   beforeEach(async () => {
     await truncateAllTables(ctx.pool);
+    mockAuthState.tokenScope = 'read:org';
   });
 
   describe('GET /auth/github', () => {
@@ -39,6 +51,23 @@ describe('Auth API', () => {
       expect(res.status).toBe(302);
       const location = res.headers.get('location');
       expect(location).toContain('github.com/login/oauth/authorize');
+    });
+
+    it('includes state parameter for returnTo', async () => {
+      const res = await fetch(`${ctx.baseUrl}/auth/github?returnTo=/project/abc123`, {
+        redirect: 'manual',
+      });
+      expect(res.status).toBe(302);
+      const location = res.headers.get('location')!;
+      expect(location).toContain('&state=');
+    });
+
+    it('OAuth URL includes read:org scope', async () => {
+      const res = await fetch(`${ctx.baseUrl}/auth/github`, { redirect: 'manual' });
+      expect(res.status).toBe(302);
+      const location = res.headers.get('location')!;
+      // The scope parameter should contain read:org (URL-encoded as read%3Aorg)
+      expect(location).toMatch(/scope=read%3Aorg/);
     });
   });
 
@@ -101,6 +130,64 @@ describe('Auth API', () => {
       );
       expect(sessions).toHaveLength(2);
     });
+
+    it('stores has_org_scope=true when scope includes read:org', async () => {
+      mockAuthState.tokenScope = 'read:org';
+
+      await fetch(`${ctx.baseUrl}/auth/github/callback?code=test-code`, {
+        redirect: 'manual',
+      });
+
+      const { rows: sessions } = await ctx.pool.query(
+        `SELECT s.has_org_scope FROM sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE u.github_id = $1
+         ORDER BY s.created_at DESC LIMIT 1`,
+        [testGitHubUser.id]
+      );
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].has_org_scope).toBe(true);
+    });
+
+    it('stores has_org_scope=false when scope lacks read:org', async () => {
+      mockAuthState.tokenScope = 'repo';
+
+      await fetch(`${ctx.baseUrl}/auth/github/callback?code=test-code`, {
+        redirect: 'manual',
+      });
+
+      const { rows: sessions } = await ctx.pool.query(
+        `SELECT s.has_org_scope FROM sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE u.github_id = $1
+         ORDER BY s.created_at DESC LIMIT 1`,
+        [testGitHubUser.id]
+      );
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].has_org_scope).toBe(false);
+    });
+
+    it('respects returnTo state parameter', async () => {
+      // Step 1: Get the OAuth redirect URL with returnTo
+      const authRes = await fetch(`${ctx.baseUrl}/auth/github?returnTo=/project/abc123`, {
+        redirect: 'manual',
+      });
+      expect(authRes.status).toBe(302);
+      const oauthUrl = authRes.headers.get('location')!;
+
+      // Extract the state parameter from the OAuth URL
+      const url = new URL(oauthUrl);
+      const state = url.searchParams.get('state');
+      expect(state).toBeTruthy();
+
+      // Step 2: Call the callback with the extracted state
+      const callbackRes = await fetch(
+        `${ctx.baseUrl}/auth/github/callback?code=test-code&state=${encodeURIComponent(state!)}`,
+        { redirect: 'manual' }
+      );
+      expect(callbackRes.status).toBe(302);
+      expect(callbackRes.headers.get('location')).toBe('/project/abc123');
+    });
   });
 
   describe('GET /auth/me', () => {
@@ -131,6 +218,17 @@ describe('Auth API', () => {
         'session=00000000-0000-0000-0000-000000000000'
       );
       expect(res.status).toBe(401);
+    });
+
+    it('includes hasOrgScope in response', async () => {
+      const user = await createTestUser(ctx.pool, { githubId: 99998, username: 'scopeuser' });
+      const session = await createTestSession(ctx.pool, user.id, { hasOrgScope: true });
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/auth/me`, session.cookie);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.hasOrgScope).toBe(true);
     });
   });
 

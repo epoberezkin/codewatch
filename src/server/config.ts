@@ -9,5 +9,6 @@ export const config = {
   },
   anthropicServiceKey: process.env.ANTHROPIC_SERVICE_KEY || '',
   cookieSecret: process.env.COOKIE_SECRET || 'dev-secret-change-in-production',
+  gatePassword: process.env.GATE_PASSWORD || '',
   sessionMaxAgeDays: 14,
 };

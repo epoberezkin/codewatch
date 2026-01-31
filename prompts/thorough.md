@@ -1,4 +1,6 @@
-Focus your analysis on security-critical code paths, analyzing approximately one-third of the codebase. Prioritize:
+The files provided have been pre-selected by a security-informed planning phase that analyzed grep patterns, component security profiles, and the project's threat model. These represent the most security-critical ~33% of the codebase.
+
+Focus your analysis on:
 - Entry points (API routes, request handlers, CLI parsers)
 - Authentication and session management
 - Authorization and access control checks
@@ -9,4 +11,4 @@ Focus your analysis on security-critical code paths, analyzing approximately one
 - External API calls and network communication
 - Deserialization and data parsing
 - Configuration and secrets handling
-Skim remaining code for obvious red flags but focus depth on the above areas.
+Analyze each provided file thoroughly for vulnerabilities in the above areas.

@@ -22,18 +22,34 @@ export interface GitHubRepo {
   html_url: string;
 }
 
+// ---------- Types (Ownership) ----------
+
+export interface OrgMembership {
+  role: 'admin' | 'member';
+  state: 'active' | 'pending';
+}
+
+export interface OwnershipCheck {
+  isOwner: boolean;
+  role?: string;
+  needsReauth?: boolean;
+}
+
 // ---------- OAuth ----------
 
-export function getOAuthUrl(): string {
+export function getOAuthUrl(state?: string): string {
   const params = new URLSearchParams({
     client_id: config.github.clientId,
     redirect_uri: config.github.callbackUrl,
-    scope: '', // zero scopes — read-only public access
+    scope: 'read:org',
   });
+  if (state) {
+    params.set('state', state);
+  }
   return `https://github.com/login/oauth/authorize?${params.toString()}`;
 }
 
-export async function exchangeCodeForToken(code: string): Promise<string> {
+export async function exchangeCodeForToken(code: string): Promise<{ accessToken: string; scope: string }> {
   const res = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: {
@@ -47,11 +63,11 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
     }),
   });
 
-  const body = await res.json() as { access_token?: string; error?: string; error_description?: string };
+  const body = await res.json() as { access_token?: string; scope?: string; error?: string; error_description?: string };
   if (body.error) {
     throw new Error(`GitHub OAuth error: ${body.error_description || body.error}`);
   }
-  return body.access_token!;
+  return { accessToken: body.access_token!, scope: body.scope || '' };
 }
 
 // ---------- User Info ----------
@@ -126,11 +142,11 @@ async function listUserRepos(username: string, token?: string): Promise<GitHubRe
   return repos;
 }
 
-// ---------- Ownership Check ----------
+// ---------- Org Membership Role ----------
 
-export async function isOrgMember(org: string, username: string, token: string): Promise<boolean> {
+export async function getOrgMembershipRole(org: string, token: string): Promise<OrgMembership | null> {
   const res = await fetch(
-    `https://api.github.com/orgs/${encodeURIComponent(org)}/members/${encodeURIComponent(username)}`,
+    `https://api.github.com/user/memberships/orgs/${encodeURIComponent(org)}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -138,7 +154,64 @@ export async function isOrgMember(org: string, username: string, token: string):
       },
     }
   );
-  return res.status === 204; // 204 = is member, 404 = not member
+
+  if (!res.ok) return null; // 404 = not a member, 403 = no scope
+
+  const body = await res.json() as { role: string; state: string };
+  return {
+    role: body.role as 'admin' | 'member',
+    state: body.state as 'active' | 'pending',
+  };
+}
+
+// ---------- Ownership Verification ----------
+
+export async function checkGitHubOwnership(
+  githubOrg: string,
+  githubUsername: string,
+  githubToken: string,
+  hasOrgScope: boolean,
+): Promise<OwnershipCheck> {
+  // Personal account: owner when username matches org
+  if (githubOrg.toLowerCase() === githubUsername.toLowerCase()) {
+    return { isOwner: true, role: 'personal' };
+  }
+
+  // Org account without read:org scope — can't verify
+  if (!hasOrgScope) {
+    return { isOwner: false, needsReauth: true };
+  }
+
+  // Org account with scope — check membership role
+  const membership = await getOrgMembershipRole(githubOrg, githubToken);
+  if (!membership) {
+    return { isOwner: false };
+  }
+
+  const isOwner = membership.role === 'admin' && membership.state === 'active';
+  return { isOwner, role: membership.role };
+}
+
+// ---------- Commit Date (for shallow-since) ----------
+
+export async function getCommitDate(
+  owner: string,
+  repo: string,
+  sha: string,
+  token?: string,
+): Promise<Date> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`GitHub API error fetching commit date: ${res.status}`);
+  const body = await res.json() as { commit: { committer: { date: string } } };
+  return new Date(body.commit.committer.date);
 }
 
 // ---------- Issue Creation (for owner notification) ----------

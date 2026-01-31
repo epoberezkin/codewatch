@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeWatch - Access</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <span class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</span>
+            <div class="nav-right">
+                <button id="theme-toggle" aria-label="Toggle theme"></button>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <div class="hero">
+            <h1>Access Required</h1>
+            <p>This site is in pre-launch testing. Enter the access password to continue.</p>
+        </div>
+
+        <div class="card" style="max-width: 400px; margin: 2rem auto;">
+            <form id="gate-form">
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="off">
+                </div>
+                <div id="gate-error" class="error-message" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Enter</button>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('gate-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorEl = document.getElementById('gate-error');
+            errorEl.style.display = 'none';
+
+            const password = document.getElementById('password').value;
+            try {
+                const res = await fetch('/gate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password }),
+                });
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    errorEl.textContent = 'Wrong password';
+                    errorEl.style.display = 'block';
+                }
+            } catch {
+                errorEl.textContent = 'Network error';
+                errorEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

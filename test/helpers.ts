@@ -32,18 +32,20 @@ export async function createTestUser(pool: Pool, overrides?: Partial<{ githubId:
   };
 }
 
-export async function createTestSession(pool: Pool, userId?: string): Promise<TestSession> {
+export async function createTestSession(pool: Pool, userId?: string, options?: { hasOrgScope?: boolean }): Promise<TestSession> {
   let uid = userId;
   if (!uid) {
     const user = await createTestUser(pool);
     uid = user.id;
   }
 
+  const hasOrgScope = options?.hasOrgScope ?? false;
+
   const { rows } = await pool.query(
-    `INSERT INTO sessions (user_id, github_token)
-     VALUES ($1, $2)
+    `INSERT INTO sessions (user_id, github_token, has_org_scope)
+     VALUES ($1, $2, $3)
      RETURNING id`,
-    [uid, 'test-github-token-' + uuidv4()]
+    [uid, 'test-github-token-' + uuidv4(), hasOrgScope]
   );
 
   const sessionId = rows[0].id;

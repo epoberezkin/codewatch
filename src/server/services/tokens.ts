@@ -83,17 +83,17 @@ export async function estimateCosts(
       full: {
         files: totalFiles,
         tokens: fullTokens,
-        costUsd: calculateCost(fullTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'full', pricing),
       },
       thorough: {
         files: thoroughFileCount,
         tokens: thoroughTokens,
-        costUsd: calculateCost(thoroughTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'thorough', pricing),
       },
       opportunistic: {
         files: opportunisticFileCount,
         tokens: opportunisticTokens,
-        costUsd: calculateCost(opportunisticTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'opportunistic', pricing),
       },
     },
     isPrecise: false,
@@ -121,54 +121,41 @@ export async function estimateCostsFromTokenCount(
       full: {
         files: totalFiles,
         tokens: totalTokens,
-        costUsd: calculateCost(totalTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'full', pricing),
       },
       thorough: {
         files: Math.ceil(totalFiles * 0.33),
         tokens: thoroughTokens,
-        costUsd: calculateCost(thoroughTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'thorough', pricing),
       },
       opportunistic: {
         files: Math.ceil(totalFiles * 0.10),
         tokens: opportunisticTokens,
-        costUsd: calculateCost(opportunisticTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'opportunistic', pricing),
       },
     },
     isPrecise: true,
   };
 }
 
-/**
- * Planning phase cost using Sonnet 4.5 ($3/$15 per Mtok).
- * Planning always processes ALL files regardless of audit level,
- * so cost is based on total project tokens, not the level's subset.
- */
-function calculatePlanningCost(totalCodeTokens: number): number {
-  const planInputTokens = Math.round(totalCodeTokens * 0.05) + 3000; // ~5% of code + prompt overhead
-  const planOutputTokens = Math.max(50, Math.round(totalCodeTokens / 300) * 50); // ~50 tokens per file entry
-  return (planInputTokens / 1_000_000) * 3 + (planOutputTokens / 1_000_000) * 15;
-}
+// Level multipliers represent analysis proportion + planning overhead:
+// Full: 100% of code + 5% planning = 1.05x
+// Thorough: 33% of code + 5% planning = 0.38x
+// Opportunistic: 10% of code + 5% planning = 0.15x
+const LEVEL_MULTIPLIERS: Record<string, number> = {
+  full: 1.05,
+  thorough: 0.38,
+  opportunistic: 0.15,
+};
 
-function calculateCost(codeTokens: number, pricing: ModelPricing, totalCodeTokens: number): number {
-  const systemPromptTokens = 3000;
-  const classifyTokens = 5000;
-  const numBatches = Math.max(1, Math.ceil(codeTokens / 150000));
-  const inputTokens = systemPromptTokens * numBatches + codeTokens + classifyTokens;
-  const outputTokensEstimate = codeTokens * 0.05;
-
-  const inputCost = (inputTokens / 1_000_000) * pricing.inputCostPerMtok;
-  const outputCost = (outputTokensEstimate / 1_000_000) * pricing.outputCostPerMtok;
-
-  // Synthesis cost
-  const synthesisInput = outputTokensEstimate + 3000;
-  const synthesisOutput = 5000; // ~10 pages
-  const synthesisCost = (synthesisInput / 1_000_000) * pricing.inputCostPerMtok
-    + (synthesisOutput / 1_000_000) * pricing.outputCostPerMtok;
-
-  // Planning phase cost (Sonnet 4.5, always based on total tokens)
-  const planningCost = calculatePlanningCost(totalCodeTokens);
-
-  return Math.round((inputCost + outputCost + synthesisCost + planningCost) * 10000) / 10000;
+function calculateLevelCost(
+  totalTokens: number,
+  level: string,
+  pricing: ModelPricing,
+): number {
+  const baseCost = (totalTokens / 1_000_000) * pricing.inputCostPerMtok;
+  const multiplier = LEVEL_MULTIPLIERS[level] ?? 1.05;
+  return Math.round(baseCost * multiplier * 10000) / 10000;
 }
 
 /**
@@ -215,17 +202,17 @@ export async function estimateCostsForComponents(
       full: {
         files: totalFiles,
         tokens: totalTokens,
-        costUsd: calculateCost(totalTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'full', pricing),
       },
       thorough: {
         files: Math.ceil(totalFiles * 0.33),
         tokens: thoroughTokens,
-        costUsd: calculateCost(thoroughTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'thorough', pricing),
       },
       opportunistic: {
         files: Math.ceil(totalFiles * 0.10),
         tokens: opportunisticTokens,
-        costUsd: calculateCost(opportunisticTokens, pricing, totalTokens),
+        costUsd: calculateLevelCost(totalTokens, 'opportunistic', pricing),
       },
     },
     isPrecise: false,

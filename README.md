@@ -63,9 +63,34 @@ This applies all SQL migrations from `sql/` to create the schema (tables, indexe
 | `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth app client secret |
 | `GITHUB_CALLBACK_URL` | No | OAuth callback URL (default: `http://localhost:3000/auth/github/callback`) |
 | `ANTHROPIC_SERVICE_KEY` | No | Anthropic API key for free `count_tokens` endpoint (precise estimates) |
-| `COOKIE_SECRET` | Yes (prod) | Secret for signing session cookies (default: dev-only value) |
+| `COOKIE_SECRET` | Yes (prod) | Secret for signing session cookies (see below) |
+| `GATE_PASSWORD` | No | Password to gate access during pre-launch testing. If not set, gate is disabled (open access). |
 | `REPOS_DIR` | No | Directory for cloned repos (default: `./repos`) |
 | `PORT` | No | Server port (default: `3000`) |
+
+### Generating `COOKIE_SECRET`
+
+The `COOKIE_SECRET` is used to sign session cookies and the development gate cookie. In development a default value is used, but in production you must set a strong random secret:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Add the output to your `.env` file:
+
+```
+COOKIE_SECRET=<generated-hex-string>
+```
+
+### Development Gate
+
+Set `GATE_PASSWORD` to require a password before accessing the site. This is useful for pre-launch testing. When set, all pages and API routes are gated behind a password prompt at `/gate`. Static assets (CSS, JS, images) are not gated.
+
+```
+GATE_PASSWORD=your-testing-password
+```
+
+To disable the gate, remove `GATE_PASSWORD` from your environment or leave it empty.
 
 ## Getting Started
 

@@ -137,7 +137,7 @@ describe('Project Pages', () => {
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse`);
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].id).toBe(projPublic);
     });
@@ -151,7 +151,7 @@ describe('Project Pages', () => {
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse`);
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(0);
     });
 
@@ -169,7 +169,7 @@ describe('Project Pages', () => {
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse?category=library`);
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].category).toBe('library');
     });
@@ -185,19 +185,19 @@ describe('Project Pages', () => {
       // Search by name
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse?search=UniqueSearch`);
       expect(res.status).toBe(200);
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
 
       // Search by org
       const res2 = await fetch(`${ctx.baseUrl}/api/projects/browse?search=test-org`);
       expect(res2.status).toBe(200);
-      const projects2 = await res2.json();
+      const { projects: projects2 } = await res2.json();
       expect(projects2).toHaveLength(1);
 
       // Search with no match
       const res3 = await fetch(`${ctx.baseUrl}/api/projects/browse?search=nonexistent`);
       expect(res3.status).toBe(200);
-      const projects3 = await res3.json();
+      const { projects: projects3 } = await res3.json();
       expect(projects3).toHaveLength(0);
     });
 
@@ -211,7 +211,7 @@ describe('Project Pages', () => {
 
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse?severity=critical`);
       expect(res.status).toBe(200);
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].id).toBe(proj1);
     });
@@ -235,7 +235,7 @@ describe('Project Pages', () => {
       );
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(2);
     });
 
@@ -249,7 +249,7 @@ describe('Project Pages', () => {
       );
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].ownership).toBeDefined();
       expect(projects[0].ownership.isOwner).toBe(true);
@@ -271,12 +271,12 @@ describe('Project Pages', () => {
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse`);
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].license).toBe('MIT');
     });
 
-    it('includes latestPublicSeverity and publicAuditCount', async () => {
+    it('includes latestSeverity and publicAuditCount', async () => {
       const session = await createTestSession(ctx.pool);
       const projId = await createProject(session);
 
@@ -287,11 +287,11 @@ describe('Project Pages', () => {
       const res = await fetch(`${ctx.baseUrl}/api/projects/browse`);
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].publicAuditCount).toBe(2);
-      // latestPublicSeverity should be from the most recent public audit
-      expect(projects[0].latestPublicSeverity).toBeTruthy();
+      // latestSeverity should be from the most recent completed audit
+      expect(projects[0].latestSeverity).toBeTruthy();
     });
 
     it('mine=true does not include other users projects', async () => {
@@ -309,7 +309,7 @@ describe('Project Pages', () => {
       );
       expect(res.status).toBe(200);
 
-      const projects = await res.json();
+      const { projects } = await res.json();
       expect(projects).toHaveLength(1);
       expect(projects[0].id).toBe(proj1);
     });

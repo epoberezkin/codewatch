@@ -10,7 +10,6 @@ interface BrowseProject {
   category: string | null;
   license: string | null;
   publicAuditCount: number;
-  latestPublicSeverity?: string | null;
   latestSeverity?: string | null;
   latestAuditDate: string | null;
   createdAt: string;
@@ -22,21 +21,32 @@ interface BrowseProject {
   };
 }
 
+interface BrowseResponse {
+  projects: BrowseProject[];
+  filters: {
+    categories: string[];
+    severities: string[];
+  };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  // Show "My Projects" checkbox if authenticated
-  await waitForAuth();
-  if (currentUser) {
-    show('mine-filter-label');
-  }
-
-  // Initial load
-  loadProjects();
-
-  // Filter event handlers
+  // Filter elements — declared before loadProjects() to avoid TDZ
   const searchInput = $('search-input') as HTMLInputElement | null;
   const categoryFilter = $('category-filter') as HTMLSelectElement | null;
   const severityFilter = $('severity-filter') as HTMLSelectElement | null;
   const mineFilter = $('mine-filter') as HTMLInputElement | null;
+
+  let filtersPopulated = false;
+
+  // Load projects immediately (public browse doesn't require auth)
+  loadProjects();
+
+  // Show "My Projects" checkbox once auth resolves (non-blocking)
+  waitForAuth().then(() => {
+    if (currentUser) {
+      show('mine-filter-label');
+    }
+  });
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -61,7 +71,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (mine) params.set('mine', 'true');
 
     const listEl = $('projects-list');
-    const emptyEl = $('empty-state');
     if (!listEl) return;
 
     // Show loading
@@ -69,29 +78,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     hide('empty-state');
 
     try {
-      const projects = await apiFetch<BrowseProject[]>(`/api/projects/browse?${params.toString()}`);
+      const response = await apiFetch<BrowseResponse>(`/api/projects/browse?${params.toString()}`);
 
-      if (projects.length === 0) {
+      // Populate filter dropdowns on first successful load
+      if (!filtersPopulated) {
+        populateFilters(response.filters);
+        filtersPopulated = true;
+      }
+
+      if (response.projects.length === 0) {
         listEl.innerHTML = '';
         show('empty-state');
         const msgEl = $('empty-message');
         if (msgEl) {
           msgEl.textContent = mine
             ? 'You have no projects yet. Add a project from the home page.'
-            : 'No projects with public audits match your filters.';
+            : 'No projects match your filters.';
         }
         return;
       }
 
       hide('empty-state');
-      listEl.innerHTML = projects.map(p => renderProjectCard(p, mine)).join('');
+      listEl.innerHTML = response.projects.map(p => renderProjectCard(p, mine)).join('');
     } catch (err) {
       listEl.innerHTML = `<div class="notice notice-error">${escapeHtml(err instanceof Error ? err.message : 'Failed to load projects')}</div>`;
     }
   }
 
+  function populateFilters(filters: { categories: string[]; severities: string[] }) {
+    if (categoryFilter) {
+      const current = categoryFilter.value;
+      categoryFilter.innerHTML = '<option value="all">All Categories</option>';
+      for (const cat of filters.categories) {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat.replace(/_/g, ' ');
+        categoryFilter.appendChild(opt);
+      }
+      categoryFilter.value = current;
+    }
+    if (severityFilter) {
+      const current = severityFilter.value;
+      severityFilter.innerHTML = '<option value="all">All Severities</option>';
+      for (const sev of filters.severities) {
+        const opt = document.createElement('option');
+        opt.value = sev;
+        opt.textContent = sev.charAt(0).toUpperCase() + sev.slice(1);
+        severityFilter.appendChild(opt);
+      }
+      severityFilter.value = current;
+    }
+  }
+
   function renderProjectCard(p: BrowseProject, isMineMode: boolean): string {
-    const sev = p.latestPublicSeverity || p.latestSeverity;
+    const sev = p.latestSeverity;
     const auditCount = isMineMode ? (p.auditCount || 0) : (p.publicAuditCount || 0);
     const auditLabel = isMineMode ? 'audit' : 'public audit';
 
@@ -126,6 +166,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     return '';
   }
-
-  // waitForAuth is now defined in common.ts
 });

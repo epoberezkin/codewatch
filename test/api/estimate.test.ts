@@ -127,7 +127,7 @@ describe('Estimation API', () => {
       expect(rows[0].total_tokens).toBe(6800);
     });
 
-    it('cost estimates include planning overhead', async () => {
+    it('cost estimates use multiplier-based formula', async () => {
       const projectId = await createProject();
 
       const res = await fetch(`${ctx.baseUrl}/api/estimate`, {
@@ -137,18 +137,17 @@ describe('Estimation API', () => {
       });
       const data = await res.json();
 
-      // Planning uses Sonnet 4.5 ($3/$15 per Mtok) on total tokens (6800)
-      // planInput = round(6800*0.05) + 3000 = 3340
-      // planOutput = max(50, round(6800/300)*50) = max(50, 1150) = 1150
-      // planningCost ≈ (3340/1M)*3 + (1150/1M)*15 ≈ 0.0273
-      // This overhead is the same for all levels (planning always covers all files)
+      // Multiplier-based cost: baseCost = 6800 tokens * $5/Mtok = $0.034
+      // Full: $0.034 * 1.05 = $0.0357
+      // Thorough: $0.034 * 0.38 = $0.01292
+      // Opportunistic: $0.034 * 0.15 = $0.0051
+      const baseCost = (6800 / 1_000_000) * 5;
 
-      // Verify planning overhead makes opportunistic cost > 0.02
-      // (without planning, opportunistic on 680 tokens would cost ~0.01)
-      expect(data.estimates.opportunistic.costUsd).toBeGreaterThan(0.02);
+      expect(data.estimates.full.costUsd).toBeCloseTo(baseCost * 1.05, 3);
+      expect(data.estimates.thorough.costUsd).toBeCloseTo(baseCost * 0.38, 3);
+      expect(data.estimates.opportunistic.costUsd).toBeCloseTo(baseCost * 0.15, 3);
 
-      // Verify all levels still maintain correct ordering
-      // (full > thorough > opportunistic, since analysis cost varies but planning is constant)
+      // Verify correct ordering: full > thorough > opportunistic
       expect(data.estimates.full.costUsd).toBeGreaterThan(data.estimates.thorough.costUsd);
       expect(data.estimates.thorough.costUsd).toBeGreaterThan(data.estimates.opportunistic.costUsd);
     });

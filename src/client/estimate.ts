@@ -1,6 +1,6 @@
 // ============================================================
 // CodeWatch - Cost Estimation Page (estimate.html)
-// Shows cost cards for 3 levels, component analysis, API key input
+// Step-based flow: Stats → Component Analysis → Mode Selection → Start
 // ============================================================
 
 interface EstimateData {
@@ -74,7 +74,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
 
     renderProjectHeader(project);
-    renderEstimate(estimate);
+    renderProjectStats(estimate);
+    renderEstimateCards(estimate);
+    updatePrecisionLabel(estimate);
     estimateData = estimate;
 
     if (estimate.cloneErrors && estimate.cloneErrors.length > 0) {
@@ -96,16 +98,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       show('non-owner-notice');
     }
 
-    // Show component section if user is logged in
+    // Check for existing components — if found, skip to step 2
     if (user) {
-      show('component-section');
-      // Check for existing components
       await loadExistingComponents();
     }
   } catch (err) {
     setHtml('header-loading', `<div class="notice notice-error">${escapeHtml(err instanceof Error ? err.message : 'Failed to load')}</div>`);
     return;
   }
+
+  // ---- Rendering ----
 
   function renderProjectHeader(project: ProjectData) {
     hide('header-loading');
@@ -118,18 +120,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHtml('project-meta', metaHtml);
   }
 
-  function renderEstimate(data: EstimateData) {
-    const levels = ['full', 'thorough', 'opportunistic'] as const;
-    for (const level of levels) {
-      const est = data.estimates[level];
-      setHtml(`price-${level}`, `${formatUSD(est.costUsd)} <small>estimated</small>`);
-      setHtml(`stats-${level}`, `
-        <span>Files: ${formatNumber(est.files)}</span>
-        <span>Tokens: ${formatNumber(est.tokens)}</span>
-      `);
-    }
+  function renderProjectStats(data: EstimateData) {
+    setText('stat-files', `${formatNumber(data.totalFiles)} files`);
+    setText('stat-tokens', `${formatNumber(data.totalTokens)} tokens`);
 
-    setText('estimate-label', data.isPrecise
+    // Repo breakdown
+    if (data.repoBreakdown && data.repoBreakdown.length > 0) {
+      const breakdownHtml = data.repoBreakdown.map(r =>
+        `<span>${escapeHtml(r.repoName)}: ${formatNumber(r.files)} files, ${formatNumber(r.tokens)} tokens</span>`
+      ).join('<br>');
+      setHtml('repo-breakdown', breakdownHtml);
+    }
+  }
+
+  function updatePrecisionLabel(data: EstimateData) {
+    setText('estimate-precision', data.isPrecise
       ? 'Precise estimate (token count verified)'
       : 'Approximate estimate (\u00B115%)');
 
@@ -138,19 +143,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  function renderEstimateCards(data: EstimateData) {
+    const levels = ['full', 'thorough', 'opportunistic'] as const;
+    for (const level of levels) {
+      const est = data.estimates[level];
+      setHtml(`price-${level}`, `${formatUSD(est.costUsd)} <small>estimated</small>`);
+    }
+  }
+
+  // ---- Component Loading ----
+
   async function loadExistingComponents() {
     try {
       const comps = await apiFetch<ComponentItem[]>(`/api/projects/${projectId}/components`);
       if (comps.length > 0) {
         components = comps;
         selectedComponentIds = comps.map(c => c.id);
-        renderComponentTable(comps);
-        hide('component-not-analyzed');
-        show('component-table-container');
+        showStep2(comps);
       }
     } catch {
       // No components yet, that's fine
     }
+  }
+
+  function showStep2(comps: ComponentItem[]) {
+    hide('analyze-section');
+    renderComponentTable(comps);
+    show('step-2');
+    // Enable audit level cards (remove disabled state)
+    enableCards();
+    // Render mode cards with costs from scoped estimate (all components selected by default)
+    updateScopedEstimate();
+  }
+
+  function enableCards() {
+    document.querySelectorAll<HTMLElement>('.estimate-card').forEach(card => {
+      card.classList.remove('disabled');
+    });
+    const hint = $('cards-hint');
+    if (hint) hint.style.display = 'none';
   }
 
   function renderComponentTable(comps: ComponentItem[]) {
@@ -187,8 +218,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         onComponentSelectionChange();
       });
     }
-
-    updateScopedEstimate();
   }
 
   async function onComponentSelectionChange() {
@@ -204,6 +233,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function updateScopedEstimate() {
     if (selectedComponentIds.length === 0) {
       setText('scoped-estimate-label', 'No components selected');
+      // Clear mode card prices
+      setHtml('price-full', '--');
+      setHtml('price-thorough', '--');
+      setHtml('price-opportunistic', '--');
       return;
     }
 
@@ -212,7 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         projectId,
         componentIds: selectedComponentIds,
       });
-      renderEstimate(scoped);
+      renderEstimateCards(scoped);
       estimateData = scoped;
       setText('scoped-estimate-label',
         `${selectedComponentIds.length} of ${components.length} components selected ` +
@@ -222,19 +255,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Component analysis
-  const analysisKeyInput = $('analysis-api-key') as HTMLInputElement | null;
-  const analyzeBtn = $('analyze-components-btn') as HTMLButtonElement | null;
+  // ---- API Key ----
 
-  analysisKeyInput?.addEventListener('input', () => {
-    if (analyzeBtn) {
-      analyzeBtn.disabled = !analysisKeyInput.value.trim().startsWith('sk-ant-');
-    }
+  const apiKeyInput = $('api-key') as HTMLInputElement | null;
+
+  function isValidApiKeyFormat(key: string): boolean {
+    return key.startsWith('sk-ant-');
+  }
+
+  apiKeyInput?.addEventListener('input', () => {
+    updateStartButton();
+    updateAnalyzeButton();
   });
 
+  // ---- Component Analysis ----
+
+  const analyzeBtn = $('analyze-components-btn') as HTMLButtonElement | null;
+
+  function updateAnalyzeButton() {
+    if (!analyzeBtn) return;
+    const keyValue = apiKeyInput?.value.trim() || '';
+    analyzeBtn.disabled = !isValidApiKeyFormat(keyValue);
+  }
+
   analyzeBtn?.addEventListener('click', async () => {
-    const apiKey = analysisKeyInput?.value.trim();
-    if (!apiKey || !apiKey.startsWith('sk-ant-')) return;
+    const apiKey = apiKeyInput?.value.trim();
+    if (!apiKey || !isValidApiKeyFormat(apiKey)) return;
 
     analyzeBtn.disabled = true;
     hide('component-not-analyzed');
@@ -256,13 +302,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (status.status === 'completed') {
           hide('component-analyzing');
-          await loadExistingComponents();
-          show('component-table-container');
+          const comps = await apiFetch<ComponentItem[]>(`/api/projects/${projectId}/components`);
+          if (comps.length > 0) {
+            components = comps;
+            selectedComponentIds = comps.map(c => c.id);
+            showStep2(comps);
+          }
         } else if (status.status === 'failed') {
           hide('component-analyzing');
           show('component-not-analyzed');
           alert('Component analysis failed: ' + (status.errorMessage || 'Unknown error'));
-          analyzeBtn.disabled = false;
+          updateAnalyzeButton();
         } else {
           setTimeout(poll, 2000);
         }
@@ -271,23 +321,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       hide('component-analyzing');
       show('component-not-analyzed');
-      analyzeBtn.disabled = false;
+      updateAnalyzeButton();
       alert(err instanceof Error ? err.message : 'Failed to start analysis');
     }
   });
 
-  // Level selection
+  // ---- Level Selection (cards) ----
+
   const cards = document.querySelectorAll<HTMLElement>('.estimate-card');
   cards.forEach(card => {
     card.addEventListener('click', () => {
+      if (card.classList.contains('disabled')) return;
       cards.forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
       selectedLevel = card.dataset.level || null;
+      // Show step 3 when a level is selected
+      show('step-3');
       updateStartButton();
     });
   });
 
-  // Precise estimate button
+  // ---- Precise Estimate (Step 1) ----
+
   const preciseBtn = $('precise-btn') as HTMLButtonElement | null;
   preciseBtn?.addEventListener('click', async () => {
     if (!projectId) return;
@@ -295,7 +350,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     preciseBtn.textContent = 'Calculating...';
     try {
       const precise = await apiPost<EstimateData>('/api/estimate/precise', { projectId });
-      renderEstimate(precise);
+      renderEstimateCards(precise);
+      updatePrecisionLabel(precise);
       estimateData = precise;
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to get precise estimate');
@@ -305,13 +361,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // API key input
-  const apiKeyInput = $('api-key') as HTMLInputElement | null;
-  apiKeyInput?.addEventListener('input', updateStartButton);
-
-  function isValidApiKeyFormat(key: string): boolean {
-    return key.startsWith('sk-ant-');
-  }
+  // ---- Start Button (Step 3) ----
 
   function updateStartButton() {
     const btn = $('start-audit-btn') as HTMLButtonElement | null;
@@ -320,6 +370,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hasKey = keyValue.length > 0;
     const validKey = hasKey && isValidApiKeyFormat(keyValue);
     const hasLevel = !!selectedLevel;
+    const hasComponents = selectedComponentIds.length > 0;
 
     // Show/hide key format error
     if (hasKey && !validKey) {
@@ -328,23 +379,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       hide('api-key-error');
     }
 
-    btn.disabled = !validKey || !hasLevel;
-    if (!hasLevel) {
+    btn.disabled = !validKey || !hasLevel || !hasComponents;
+    if (!hasComponents) {
+      btn.textContent = 'Select at least one component above';
+    } else if (!hasLevel) {
       btn.textContent = 'Select an audit level above';
     } else if (!hasKey) {
-      btn.textContent = 'Enter your API key';
+      btn.textContent = 'Enter your API key above';
     } else if (!validKey) {
       btn.textContent = 'Invalid key format (should start with sk-ant-)';
     } else {
       const est = estimateData?.estimates[selectedLevel as keyof EstimateData['estimates']];
       const prefix = useIncremental ? 'Start incremental ' : 'Start ';
-      const compLabel = selectedComponentIds.length > 0 && selectedComponentIds.length < components.length
+      const compLabel = selectedComponentIds.length < components.length
         ? ` (${selectedComponentIds.length} components)` : '';
       btn.textContent = `${prefix}${selectedLevel} audit${compLabel}${est ? ` (~${formatUSD(est.costUsd)})` : ''}`;
     }
   }
 
-  // Start audit
   const startBtn = $('start-audit-btn') as HTMLButtonElement | null;
   startBtn?.addEventListener('click', async () => {
     if (!selectedLevel || !apiKeyInput?.value.trim() || !startBtn || !isValidApiKeyFormat(apiKeyInput.value.trim())) return;
@@ -372,7 +424,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Incremental / Fresh buttons
+  // ---- Incremental / Fresh buttons ----
+
   const incrementalBtn = $('incremental-btn') as HTMLButtonElement | null;
   const freshBtn = $('fresh-btn') as HTMLButtonElement | null;
 

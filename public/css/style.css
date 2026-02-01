@@ -549,12 +549,16 @@ tr:hover td {
     transition: border-color 0.2s;
     cursor: pointer;
 }
-.estimate-card:hover,
+.estimate-card:not(.disabled):hover,
 .estimate-card.selected {
     border-color: var(--accent);
 }
 .estimate-card.selected {
     box-shadow: 0 0 0 2px rgba(7, 180, 185, 0.2);
+}
+.estimate-card.disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 .estimate-card h3 {

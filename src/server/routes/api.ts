@@ -142,13 +142,13 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
   }
 });
 
-// GET /api/projects/browse — public browse or "My Projects" listing
+// GET /api/projects/browse — unified browse with optional "My Projects" subset filter
 router.get('/projects/browse', async (req: Request, res: Response) => {
   const pool = getPool();
   const { category, severity, search, mine } = req.query;
 
   try {
-    // If mine=true, require auth
+    // Resolve auth (optional — browse works without auth)
     let userId: string | null = null;
     let githubUsername: string | null = null;
     let githubToken: string | null = null;
@@ -170,120 +170,115 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
       }
     }
 
-    if (mine === 'true') {
-      if (!userId) {
-        res.status(401).json({ error: 'Authentication required for My Projects' });
-        return;
-      }
-
-      // My Projects: all projects created by user
-      let myQuery = `
-        SELECT p.id, p.name, p.github_org, p.category, p.created_at,
-               (SELECT COUNT(*) FROM audits a WHERE a.project_id = p.id) as audit_count,
-               (SELECT COUNT(*) FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE) as public_audit_count,
-               (SELECT a.max_severity FROM audits a WHERE a.project_id = p.id AND a.status = 'completed'
-                ORDER BY a.completed_at DESC LIMIT 1) as latest_severity,
-               (SELECT a.completed_at FROM audits a WHERE a.project_id = p.id AND a.status = 'completed'
-                ORDER BY a.completed_at DESC LIMIT 1) as latest_audit_date,
-               (SELECT string_agg(DISTINCT r.license, ', ') FROM repositories r
-                JOIN project_repos pr ON pr.repo_id = r.id
-                WHERE pr.project_id = p.id AND r.license IS NOT NULL) as license
-        FROM projects p
-        WHERE p.created_by = $1`;
-      const params: any[] = [userId];
-      let paramIdx = 2;
-
-      if (category && category !== 'all') {
-        myQuery += ` AND p.category = $${paramIdx}`;
-        params.push(category);
-        paramIdx++;
-      }
-      if (search) {
-        myQuery += ` AND (p.name ILIKE $${paramIdx} OR p.github_org ILIKE $${paramIdx})`;
-        params.push(`%${escapeILike(String(search))}%`);
-        paramIdx++;
-      }
-
-      myQuery += ' ORDER BY p.created_at DESC LIMIT 50';
-
-      const { rows: projects } = await pool.query(myQuery, params);
-
-      // Resolve ownership for each project
-      const results = await Promise.all(projects.map(async (p) => {
-        let ownership = { isOwner: false, role: null as string | null, needsReauth: false };
-        if (githubUsername && githubToken) {
-          try {
-            const result = await resolveOwnership(pool, userId!, p.github_org, githubUsername, githubToken, hasOrgScope);
-            ownership = { isOwner: result.isOwner, role: result.role || null, needsReauth: result.needsReauth || false };
-          } catch { /* ignore ownership check failures */ }
-        }
-
-        return {
-          id: p.id,
-          name: p.name,
-          githubOrg: p.github_org,
-          category: p.category,
-          license: p.license || null,
-          auditCount: parseInt(p.audit_count),
-          publicAuditCount: parseInt(p.public_audit_count),
-          latestSeverity: p.latest_severity || null,
-          latestAuditDate: p.latest_audit_date || null,
-          createdAt: p.created_at,
-          ownership,
-        };
-      }));
-
-      res.json(results);
+    if (mine === 'true' && !userId) {
+      res.status(401).json({ error: 'Authentication required for My Projects' });
       return;
     }
 
-    // Public browse: projects with at least one public audit
-    let browseQuery = `
-      SELECT p.id, p.name, p.github_org, p.category, p.created_at,
+    // Base visibility:
+    // - Not logged in: projects with at least one public audit
+    // - Logged in: projects with public audit OR user's own projects
+    // "My Projects" is an additional filter (subset), not a separate query
+    const baseParams: any[] = [];
+    let baseCondition: string;
+    if (userId) {
+      baseCondition = `(EXISTS (SELECT 1 FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE) OR p.created_by = $1)`;
+      baseParams.push(userId);
+    } else {
+      baseCondition = `EXISTS (SELECT 1 FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE)`;
+    }
+
+    // Build additional filter conditions
+    const filterClauses: string[] = [];
+    const queryParams = [...baseParams];
+    let paramIdx = baseParams.length + 1;
+
+    if (mine === 'true' && userId) {
+      filterClauses.push(`p.created_by = $${paramIdx}`);
+      queryParams.push(userId);
+      paramIdx++;
+    }
+    if (category && category !== 'all') {
+      filterClauses.push(`p.category = $${paramIdx}`);
+      queryParams.push(category);
+      paramIdx++;
+    }
+    if (severity && severity !== 'all') {
+      filterClauses.push(`EXISTS (SELECT 1 FROM audits a2 WHERE a2.project_id = p.id AND a2.status = 'completed' AND a2.max_severity = $${paramIdx})`);
+      queryParams.push(severity);
+      paramIdx++;
+    }
+    if (search) {
+      filterClauses.push(`(p.name ILIKE $${paramIdx} OR p.github_org ILIKE $${paramIdx})`);
+      queryParams.push(`%${escapeILike(String(search))}%`);
+      paramIdx++;
+    }
+
+    const filterWhere = filterClauses.length > 0 ? ' AND ' + filterClauses.join(' AND ') : '';
+
+    // Main query
+    const mainQuery = `
+      SELECT p.id, p.name, p.github_org, p.category, p.created_by, p.created_at,
              (SELECT COUNT(*) FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE) as public_audit_count,
-             (SELECT a.max_severity FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE AND a.status = 'completed'
-              ORDER BY a.completed_at DESC LIMIT 1) as latest_public_severity,
-             (SELECT a.completed_at FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE AND a.status = 'completed'
+             (SELECT COUNT(*) FROM audits a WHERE a.project_id = p.id) as audit_count,
+             (SELECT a.max_severity FROM audits a WHERE a.project_id = p.id AND a.status = 'completed'
+              ORDER BY a.completed_at DESC LIMIT 1) as latest_severity,
+             (SELECT a.completed_at FROM audits a WHERE a.project_id = p.id AND a.status = 'completed'
               ORDER BY a.completed_at DESC LIMIT 1) as latest_audit_date,
              (SELECT string_agg(DISTINCT r.license, ', ') FROM repositories r
               JOIN project_repos pr ON pr.repo_id = r.id
               WHERE pr.project_id = p.id AND r.license IS NOT NULL) as license
       FROM projects p
-      WHERE EXISTS (SELECT 1 FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE)`;
-    const params: any[] = [];
-    let paramIdx = 1;
+      WHERE ${baseCondition}${filterWhere}
+      ORDER BY p.created_at DESC LIMIT 50`;
 
-    if (category && category !== 'all') {
-      browseQuery += ` AND p.category = $${paramIdx}`;
-      params.push(category);
-      paramIdx++;
-    }
-    if (severity && severity !== 'all') {
-      browseQuery += ` AND EXISTS (SELECT 1 FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE AND a.max_severity = $${paramIdx})`;
-      params.push(severity);
-      paramIdx++;
-    }
-    if (search) {
-      browseQuery += ` AND (p.name ILIKE $${paramIdx} OR p.github_org ILIKE $${paramIdx})`;
-      params.push(`%${escapeILike(String(search))}%`);
-      paramIdx++;
-    }
+    // Filter value queries (from base set, without category/severity/search applied)
+    const catQuery = `SELECT DISTINCT p.category FROM projects p WHERE ${baseCondition} AND p.category IS NOT NULL ORDER BY p.category`;
+    const sevQuery = `SELECT DISTINCT a.max_severity FROM audits a JOIN projects p ON p.id = a.project_id WHERE ${baseCondition} AND a.status = 'completed' AND a.max_severity IS NOT NULL`;
 
-    browseQuery += ' ORDER BY p.created_at DESC LIMIT 50';
+    const [{ rows: projects }, { rows: catRows }, { rows: sevRows }] = await Promise.all([
+      pool.query(mainQuery, queryParams),
+      pool.query(catQuery, baseParams),
+      pool.query(sevQuery, baseParams),
+    ]);
 
-    const { rows: projects } = await pool.query(browseQuery, params);
+    // Resolve ownership only for user's own projects (avoid unnecessary GitHub API calls)
+    const resolvedProjects = await Promise.all(projects.map(async (p) => {
+      let ownership = undefined;
+      if (userId && p.created_by === userId && githubUsername && githubToken) {
+        try {
+          const result = await resolveOwnership(pool, userId, p.github_org, githubUsername, githubToken, hasOrgScope);
+          ownership = { isOwner: result.isOwner, role: result.role || null, needsReauth: result.needsReauth || false };
+        } catch { /* ignore */ }
+      }
 
-    res.json(projects.map(p => ({
-      id: p.id,
-      name: p.name,
-      githubOrg: p.github_org,
-      category: p.category,
-      license: p.license || null,
-      publicAuditCount: parseInt(p.public_audit_count),
-      latestPublicSeverity: p.latest_public_severity || null,
-      latestAuditDate: p.latest_audit_date || null,
-      createdAt: p.created_at,
-    })));
+      return {
+        id: p.id,
+        name: p.name,
+        githubOrg: p.github_org,
+        category: p.category,
+        license: p.license || null,
+        publicAuditCount: parseInt(p.public_audit_count),
+        auditCount: parseInt(p.audit_count),
+        latestSeverity: p.latest_severity || null,
+        latestAuditDate: p.latest_audit_date || null,
+        createdAt: p.created_at,
+        ...(ownership ? { ownership } : {}),
+      };
+    }));
+
+    const severityOrder = ['critical', 'high', 'medium', 'low', 'informational'];
+    const severities = sevRows
+      .map(r => r.max_severity)
+      .sort((a: string, b: string) => severityOrder.indexOf(a) - severityOrder.indexOf(b));
+
+    res.json({
+      projects: resolvedProjects,
+      filters: {
+        categories: catRows.map(r => r.category),
+        severities,
+      },
+    });
   } catch (err) {
     console.error('Error browsing projects:', err);
     res.status(500).json({ error: 'Failed to browse projects' });
@@ -665,37 +660,50 @@ router.post('/estimate/precise', requireAuth as any, async (req: Request, res: R
     }
 
     // Build the user message the same way the audit would — file contents concatenated
-    // Count tokens in batches to stay within context limits
-    const BATCH_SIZE = 100;
+    // Count tokens using dynamic size-based batching to stay under API request limit (~32MB)
+    const MAX_BATCH_BYTES = 20_000_000; // 20MB per batch (safe margin below 32MB limit)
     let totalPreciseTokens = 0;
     const systemPrompt = 'You are a security auditor analyzing source code.';
 
-    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-      const batch = allFiles.slice(i, i + BATCH_SIZE);
-      const userMessage = batch.map(f => {
-        try {
-          // Resolve absolute path: repoLocalPath + path within repo
-          const slashIdx = f.relativePath.indexOf('/');
-          const repoName = f.relativePath.substring(0, slashIdx);
-          const filePath = f.relativePath.substring(slashIdx + 1);
-          const localPath = repoLocalPaths.get(repoName);
-          if (!localPath) return '';
-          const content = fs.readFileSync(path.join(localPath, filePath), 'utf-8');
-          return `### File: ${f.relativePath}\n\`\`\`\n${content}\n\`\`\``;
-        } catch {
-          return '';
-        }
-      }).filter(Boolean).join('\n\n');
+    let batchEntries: string[] = [];
+    let batchBytes = 0;
 
-      if (userMessage.length === 0) continue;
-
+    const flushBatch = async () => {
+      if (batchEntries.length === 0) return;
+      const userMessage = batchEntries.join('\n\n');
       const tokens = await countTokens(
         config.anthropicServiceKey,
         systemPrompt,
         userMessage,
       );
       totalPreciseTokens += tokens;
+      batchEntries = [];
+      batchBytes = 0;
+    };
+
+    for (const f of allFiles) {
+      try {
+        const slashIdx = f.relativePath.indexOf('/');
+        const repoName = f.relativePath.substring(0, slashIdx);
+        const filePath = f.relativePath.substring(slashIdx + 1);
+        const localPath = repoLocalPaths.get(repoName);
+        if (!localPath) continue;
+        const content = fs.readFileSync(path.join(localPath, filePath), 'utf-8');
+        const entry = `### File: ${f.relativePath}\n\`\`\`\n${content}\n\`\`\``;
+        const entryBytes = Buffer.byteLength(entry, 'utf-8');
+
+        // If adding this entry would exceed the limit, flush current batch first
+        if (batchBytes + entryBytes > MAX_BATCH_BYTES && batchEntries.length > 0) {
+          await flushBatch();
+        }
+
+        batchEntries.push(entry);
+        batchBytes += entryBytes;
+      } catch {
+        continue;
+      }
     }
+    await flushBatch();
 
     // Update repo breakdown with precise token proportions
     const roughTotal = roughTokenCount(allFiles);

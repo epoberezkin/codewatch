@@ -17,5 +17,8 @@ node_modules/
 # Cloned repos (runtime data)
 repos/
 
+# Database
+db/
+
 # OS
 .DS_Store

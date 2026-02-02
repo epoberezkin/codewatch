@@ -32,6 +32,13 @@ vi.mock('../../src/server/services/github', () => ({
   getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
   checkGitHubOwnership: async () => mockGitHubState.ownershipResult,
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
+  getGitHubEntity: async () => ({
+    login: 'test-org', type: 'Organization',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/99999',
+  }),
+  listRepoBranches: async () => [{ name: 'main' }, { name: 'dev' }],
+  getRepoDefaultBranch: async () => 'main',
+  getCommitDate: async () => new Date('2025-01-01'),
 }));
 
 // Mock git service
@@ -69,14 +76,17 @@ describe('Project Pages', () => {
   beforeEach(async () => {
     await truncateAllTables(ctx.pool);
     mockGitHubState.ownershipResult = { isOwner: true };
+    projectCounter = 0;
   });
 
   // Helper: create a project via API
-  async function createProject(session: { cookie: string; userId: string }, org = 'test-org'): Promise<string> {
+  let projectCounter = 0;
+  async function createProject(session: { cookie: string; userId: string }, org = 'test-org', repoName?: string): Promise<string> {
+    const repo = repoName || `repo-alpha-${++projectCounter}`;
     const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ githubOrg: org, repoNames: ['repo-alpha'] }),
+      body: JSON.stringify({ githubOrg: org, repoNames: [repo] }),
     });
     const body = await res.json();
     return body.projectId;

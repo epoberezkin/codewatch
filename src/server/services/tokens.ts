@@ -148,14 +148,21 @@ const LEVEL_MULTIPLIERS: Record<string, number> = {
   opportunistic: 0.15,
 };
 
+// Estimated ratio of output tokens to input tokens per analysis batch.
+// Security audits produce structured JSON findings (~15% of input size).
+const ESTIMATED_OUTPUT_RATIO = 0.15;
+
 function calculateLevelCost(
   totalTokens: number,
   level: string,
   pricing: ModelPricing,
 ): number {
-  const baseCost = (totalTokens / 1_000_000) * pricing.inputCostPerMtok;
   const multiplier = LEVEL_MULTIPLIERS[level] ?? 1.05;
-  return Math.round(baseCost * multiplier * 10000) / 10000;
+  const inputTokens = totalTokens * multiplier;
+  const outputTokens = inputTokens * ESTIMATED_OUTPUT_RATIO;
+  const cost = (inputTokens / 1_000_000) * pricing.inputCostPerMtok
+             + (outputTokens / 1_000_000) * pricing.outputCostPerMtok;
+  return Math.round(cost * 10000) / 10000;
 }
 
 /**

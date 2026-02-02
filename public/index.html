@@ -42,29 +42,52 @@
             </div>
             <div class="input-with-btn">
                 <input type="url" id="repo-url" placeholder="https://github.com/org/repo" autocomplete="off">
-                <button class="btn btn-primary" id="detect-org-btn">Detect Org</button>
+                <button class="btn btn-primary" id="add-project-btn">Add Project</button>
             </div>
             <p id="repo-url-error" class="text-sm mt-1 hidden" style="color: var(--error);"></p>
         </div>
 
-        <!-- Step 2: Select repos (hidden until org detected) -->
-        <div class="repo-selector hidden" id="step-2">
-            <div class="step-indicator">
-                <span class="step-number">2</span>
-                Select repositories for this project
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <h3 id="org-name"></h3>
-                    <label class="text-sm">
-                        <input type="checkbox" id="select-all"> Select all
-                    </label>
+        <!-- Step 2: Entity info + repos + branches (hidden until Add Project) -->
+        <div class="hidden" id="step-2" style="max-width: 600px; margin: 0 auto 2rem;">
+            <!-- Entity info card -->
+            <div class="card mb-2" id="entity-card">
+                <div class="entity-header">
+                    <img id="entity-avatar" class="entity-avatar" src="" alt="">
+                    <div>
+                        <h3 id="entity-name"></h3>
+                        <div class="entity-badges">
+                            <span class="badge badge-type" id="entity-type-badge"></span>
+                            <span class="badge badge-owner hidden" id="owner-badge">Owner</span>
+                            <span class="badge badge-member hidden" id="member-badge">Member</span>
+                        </div>
+                    </div>
                 </div>
-                <ul class="repo-list" id="repo-list"></ul>
+            </div>
+
+            <!-- Selected repos with branch dropdowns -->
+            <div class="card mb-2">
+                <div class="step-indicator">
+                    <span class="step-number">2</span>
+                    Configure repositories
+                </div>
+                <ul class="repo-list" id="selected-repos"></ul>
+                <button class="btn btn-sm btn-secondary mt-1" id="add-repos-btn">
+                    Add other repositories
+                </button>
+                <!-- Expandable full repo list -->
+                <div class="hidden mt-2" id="all-repos-section">
+                    <div class="card-header" style="display: flex; align-items: center; gap: 1rem;">
+                        <label class="text-sm">
+                            <input type="checkbox" id="select-all"> Select all
+                        </label>
+                        <input type="text" id="repo-search" placeholder="Filter repositories..." class="input-sm" style="flex: 1; max-width: 300px;">
+                    </div>
+                    <ul class="repo-list" id="all-repos-list"></ul>
+                </div>
             </div>
         </div>
 
-        <!-- Step 3: Auth + Create Project (hidden until repos selected) -->
+        <!-- Step 3: Auth + Create Project (hidden until repos configured) -->
         <div class="repo-input-section hidden" id="step-3">
             <div class="step-indicator">
                 <span class="step-number">3</span>

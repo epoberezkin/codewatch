@@ -281,6 +281,10 @@ input:focus, textarea:focus, select:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px rgba(7, 180, 185, 0.15);
 }
+.input-sm {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
+}
 input::placeholder {
     color: var(--text-secondary);
     opacity: 0.6;
@@ -531,6 +535,98 @@ tr:hover td {
     display: flex;
     gap: 0.75rem;
     margin-top: 0.125rem;
+}
+
+/* ---------- Entity Card ---------- */
+.entity-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.entity-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+}
+.entity-badges {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+.badge-type {
+    background: var(--bg-secondary);
+}
+.badge-owner {
+    background: rgba(22, 163, 74, 0.12);
+    border-color: var(--success);
+    color: var(--success);
+}
+.badge-member {
+    background: rgba(2, 192, 255, 0.1);
+    border-color: var(--btn-primary);
+    color: var(--btn-primary);
+}
+
+/* ---------- Branch Selector ---------- */
+.branch-selector {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.branch-trigger {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.branch-select {
+    max-width: 200px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+/* ---------- Repo Remove Button ---------- */
+.repo-remove-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.125rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.repo-remove-btn:hover {
+    color: var(--error);
+}
+
+/* ---------- Branch Editor (Estimate Page) ---------- */
+.branch-editor-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.branch-editor-row:last-child {
+    border-bottom: none;
+}
+.branch-editor-repo {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+.branch-editor-select {
+    max-width: 200px;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8125rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
 }
 
 /* ---------- Estimate: Cost Cards ---------- */

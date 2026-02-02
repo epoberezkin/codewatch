@@ -76,7 +76,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     await updateStatus(pool, auditId, 'cloning');
 
     const { rows: repos } = await pool.query(
-      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path
+      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, pr.branch
        FROM repositories r
        JOIN project_repos pr ON pr.repo_id = r.id
        WHERE pr.project_id = $1`,
@@ -133,7 +133,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       console.log(`[Audit ${auditId.substring(0, 8)}] Cloning ${repoIdx + 1}/${repos.length}: ${repo.repo_name}`);
 
       const repoShallowSince = shallowSinceMap.get(repo.repo_url);
-      const { localPath, headSha } = await cloneOrUpdate(repo.repo_url, undefined, repoShallowSince);
+      const { localPath, headSha } = await cloneOrUpdate(repo.repo_url, repo.branch || undefined, repoShallowSince);
       const branch = await getDefaultBranchName(localPath);
 
       // Record commit
@@ -166,11 +166,17 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     let componentPatterns: Array<{ componentId: string; patterns: string[] }> | null = null;
     if (options.componentIds && options.componentIds.length > 0) {
       const { rows: compRows } = await pool.query(
-        `SELECT id, file_patterns FROM components WHERE id = ANY($1) AND project_id = $2`,
+        `SELECT c.id, c.file_patterns, r.repo_name
+         FROM components c
+         JOIN repositories r ON r.id = c.repo_id
+         WHERE c.id = ANY($1) AND c.project_id = $2`,
         [options.componentIds, projectId]
       );
       componentPatterns = compRows.map(c => ({ componentId: c.id, patterns: c.file_patterns }));
-      const allPatterns = compRows.flatMap(c => c.file_patterns as string[]);
+      // Prefix each pattern with repo name to match namespaced file paths
+      const allPatterns = compRows.flatMap(c =>
+        (c.file_patterns as string[]).map(p => `${c.repo_name}/${p}`)
+      );
 
       if (allPatterns.length > 0) {
         allFiles = allFiles.filter(f =>

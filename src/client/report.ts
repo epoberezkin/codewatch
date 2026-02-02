@@ -36,7 +36,7 @@ interface ReportData {
   // Classification & threat model
   category: string | null;
   projectDescription: string | null;
-  involvedParties: Record<string, { can: string; cannot: string }> | null;
+  involvedParties: Record<string, { can: string | string[]; cannot: string | string[] }> | null;
   threatModel: string | null;
   threatModelSource: string | null;
   commits: Array<{ repoName: string; commitSha: string }>;
@@ -179,13 +179,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (data.involvedParties && Object.keys(data.involvedParties).length > 0) {
       show('threat-model-section');
       const parties = data.involvedParties;
-      const partyRows = Object.entries(parties).map(([party, info]) => `
+      const partyRows = Object.entries(parties).map(([party, info]) => {
+        const canText = Array.isArray(info?.can) ? info.can.join('; ') : (info?.can || '-');
+        const cannotText = Array.isArray(info?.cannot) ? info.cannot.join('; ') : (info?.cannot || '-');
+        return `
         <tr>
           <td><strong>${escapeHtml(party.replace(/_/g, ' '))}</strong></td>
-          <td>${escapeHtml(info?.can || '-')}</td>
-          <td>${escapeHtml(info?.cannot || '-')}</td>
+          <td>${escapeHtml(canText)}</td>
+          <td>${escapeHtml(cannotText)}</td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
 
       const sourceLabel = data.threatModelSource === 'repo'
         ? 'From Repository'

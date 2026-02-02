@@ -27,6 +27,13 @@ vi.mock('../../src/server/services/github', () => ({
   getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
   checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
+  getGitHubEntity: async () => ({
+    login: 'test-org', type: 'Organization',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/99999',
+  }),
+  listRepoBranches: async () => [{ name: 'main' }, { name: 'dev' }, { name: 'stable' }],
+  getRepoDefaultBranch: async () => 'main',
+  getCommitDate: async () => new Date('2025-01-01'),
 }));
 
 vi.mock('../../src/server/services/git', async (importOriginal) => {
@@ -94,7 +101,7 @@ describe('Projects API', () => {
       expect(res.status).toBe(400);
     });
 
-    it('creates project with repos', async () => {
+    it('creates project with repoNames (legacy format)', async () => {
       const session = await createTestSession(ctx.pool);
       const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
         method: 'POST',
@@ -127,17 +134,52 @@ describe('Projects API', () => {
       expect(repos).toHaveLength(2);
       expect(repos.map(r => r.repo_name).sort()).toEqual(['repo-alpha', 'repo-beta']);
 
-      // Verify project_repos links
+      // Verify project_repos links with no branch set
       const { rows: links } = await ctx.pool.query(
         'SELECT * FROM project_repos WHERE project_id = $1',
         [body.projectId]
       );
       expect(links).toHaveLength(2);
+      expect(links.every(l => l.branch === null)).toBe(true);
+    });
+
+    it('creates project with repos[] format including branch', async () => {
+      const session = await createTestSession(ctx.pool);
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          githubOrg: 'test-org',
+          repos: [
+            { name: 'repo-alpha', branch: 'dev' },
+            { name: 'repo-beta' },
+          ],
+        }),
+      });
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.projectId).toBeDefined();
+      expect(body.repos).toHaveLength(2);
+
+      // Verify project_repos branches
+      const { rows: links } = await ctx.pool.query(
+        `SELECT pr.branch, r.repo_name FROM project_repos pr
+         JOIN repositories r ON r.id = pr.repo_id
+         WHERE pr.project_id = $1
+         ORDER BY r.repo_name`,
+        [body.projectId]
+      );
+      expect(links).toHaveLength(2);
+      expect(links[0].repo_name).toBe('repo-alpha');
+      expect(links[0].branch).toBe('dev');
+      expect(links[1].repo_name).toBe('repo-beta');
+      expect(links[1].branch).toBe(null);
     });
   });
 
   describe('GET /api/projects/:id', () => {
-    it('returns project details', async () => {
+    it('returns project details with branch null for default', async () => {
       const session = await createTestSession(ctx.pool);
 
       // Create project first
@@ -161,6 +203,25 @@ describe('Projects API', () => {
       expect(project.githubOrg).toBe('test-org');
       expect(project.repos).toHaveLength(1);
       expect(project.repos[0].repoName).toBe('repo-alpha');
+      expect(project.repos[0].branch).toBe(null);
+    });
+
+    it('returns branch per repo when set', async () => {
+      const session = await createTestSession(ctx.pool);
+
+      const createRes = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          githubOrg: 'test-org',
+          repos: [{ name: 'repo-alpha', branch: 'dev' }],
+        }),
+      });
+      const { projectId } = await createRes.json();
+
+      const res = await fetch(`${ctx.baseUrl}/api/projects/${projectId}`);
+      const project = await res.json();
+      expect(project.repos[0].branch).toBe('dev');
     });
 
     it('returns 404 for nonexistent project', async () => {

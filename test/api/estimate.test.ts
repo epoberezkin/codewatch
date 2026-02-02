@@ -14,6 +14,13 @@ vi.mock('../../src/server/services/github', () => ({
   getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
   checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
+  getGitHubEntity: async () => ({
+    login: 'test-org', type: 'Organization',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/99999',
+  }),
+  listRepoBranches: async () => [{ name: 'main' }, { name: 'dev' }],
+  getRepoDefaultBranch: async () => 'main',
+  getCommitDate: async () => new Date('2025-01-01'),
 }));
 
 vi.mock('../../src/server/services/git', async (importOriginal) => {
@@ -24,6 +31,7 @@ vi.mock('../../src/server/services/git', async (importOriginal) => {
       localPath: '/tmp/claude/test-repo',
       headSha: 'abc123def456',
     }),
+    getDefaultBranchName: async () => 'main',
     scanCodeFiles: () => [
       { relativePath: 'src/index.ts', size: 3300, roughTokens: 1000 },
       { relativePath: 'src/auth.ts', size: 6600, roughTokens: 2000 },
@@ -127,7 +135,7 @@ describe('Estimation API', () => {
       expect(rows[0].total_tokens).toBe(6800);
     });
 
-    it('cost estimates use multiplier-based formula', async () => {
+    it('cost estimates use multiplier-based formula with input + output', async () => {
       const projectId = await createProject();
 
       const res = await fetch(`${ctx.baseUrl}/api/estimate`, {
@@ -137,15 +145,19 @@ describe('Estimation API', () => {
       });
       const data = await res.json();
 
-      // Multiplier-based cost: baseCost = 6800 tokens * $5/Mtok = $0.034
-      // Full: $0.034 * 1.05 = $0.0357
-      // Thorough: $0.034 * 0.38 = $0.01292
-      // Opportunistic: $0.034 * 0.15 = $0.0051
-      const baseCost = (6800 / 1_000_000) * 5;
+      // New formula: cost = (inputTokens/1M * inputCost) + (outputTokens/1M * outputCost)
+      // where inputTokens = totalTokens * multiplier, outputTokens = inputTokens * 0.15
+      // inputCostPerMtok = 5, outputCostPerMtok = 25
+      const totalTokens = 6800;
+      function expectedCost(multiplier: number) {
+        const inputTokens = totalTokens * multiplier;
+        const outputTokens = inputTokens * 0.15;
+        return (inputTokens / 1_000_000) * 5 + (outputTokens / 1_000_000) * 25;
+      }
 
-      expect(data.estimates.full.costUsd).toBeCloseTo(baseCost * 1.05, 3);
-      expect(data.estimates.thorough.costUsd).toBeCloseTo(baseCost * 0.38, 3);
-      expect(data.estimates.opportunistic.costUsd).toBeCloseTo(baseCost * 0.15, 3);
+      expect(data.estimates.full.costUsd).toBeCloseTo(expectedCost(1.05), 3);
+      expect(data.estimates.thorough.costUsd).toBeCloseTo(expectedCost(0.38), 3);
+      expect(data.estimates.opportunistic.costUsd).toBeCloseTo(expectedCost(0.15), 3);
 
       // Verify correct ordering: full > thorough > opportunistic
       expect(data.estimates.full.costUsd).toBeGreaterThan(data.estimates.thorough.costUsd);

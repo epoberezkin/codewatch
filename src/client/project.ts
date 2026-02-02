@@ -10,7 +10,7 @@ interface ProjectDetail {
   githubOrg: string;
   category: string;
   license: string | null;
-  involvedParties: Record<string, { can: string; cannot: string }> | null;
+  involvedParties: Record<string, { can: string | string[]; cannot: string | string[] }> | null;
   threatModel: string | null;
   threatModelSource: string | null;
   totalFiles: number;
@@ -129,13 +129,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Threat model: show parties table if involvedParties is present
       if (project.involvedParties && Object.keys(project.involvedParties).length > 0) {
         const parties = project.involvedParties;
-        const partyRows = Object.entries(parties).map(([party, info]) => `
+        const partyRows = Object.entries(parties).map(([party, info]) => {
+        const canText = Array.isArray(info?.can) ? info.can.join('; ') : (info?.can || '-');
+        const cannotText = Array.isArray(info?.cannot) ? info.cannot.join('; ') : (info?.cannot || '-');
+        return `
           <tr>
             <td><strong>${escapeHtml(party.replace(/_/g, ' '))}</strong></td>
-            <td>${escapeHtml(info?.can || '-')}</td>
-            <td>${escapeHtml(info?.cannot || '-')}</td>
+            <td>${escapeHtml(canText)}</td>
+            <td>${escapeHtml(cannotText)}</td>
           </tr>
-        `).join('');
+        `;
+      }).join('');
 
         const sourceLabel = project.threatModelSource === 'repo'
           ? 'From Repository'

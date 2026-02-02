@@ -6,7 +6,7 @@
 interface EstimateData {
   totalFiles: number;
   totalTokens: number;
-  repoBreakdown: Array<{ repoName: string; files: number; tokens: number }>;
+  repoBreakdown: Array<{ repoName: string; files: number; tokens: number; headSha?: string; branch?: string }>;
   estimates: {
     full: { files: number; tokens: number; costUsd: number };
     thorough: { files: number; tokens: number; costUsd: number };
@@ -24,7 +24,14 @@ interface ProjectData {
   githubOrg: string;
   category: string;
   createdBy: string | null;
-  repos: Array<{ repoName: string; language: string; stars: number }>;
+  repos: Array<{
+    id: string;
+    repoName: string;
+    language: string;
+    stars: number;
+    defaultBranch: string;
+    branch: string | null;
+  }>;
 }
 
 interface ComponentItem {
@@ -65,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let baseAuditId: string | null = null;
   let selectedComponentIds: string[] = [];
   let components: ComponentItem[] = [];
+  let projectData: ProjectData | null = null;
 
   // Load project info and estimate in parallel
   try {
@@ -73,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       apiPost<EstimateData>('/api/estimate', { projectId }),
     ]);
 
+    projectData = project;
     renderProjectHeader(project);
     renderProjectStats(estimate);
     renderEstimateCards(estimate);
@@ -114,9 +123,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     show('header-content');
     setText('project-name', project.name);
     setText('project-description', project.description || `GitHub org: ${project.githubOrg}`);
-    const metaHtml = project.repos.map(r =>
-      `<span>${escapeHtml(r.repoName)}${r.language ? ` (${escapeHtml(r.language)})` : ''}</span>`
-    ).join('');
+    const metaHtml = project.repos.map(r => {
+      const branchLabel = r.branch || r.defaultBranch || '';
+      return `<span>${escapeHtml(r.repoName)}${r.language ? ` (${escapeHtml(r.language)})` : ''}${branchLabel ? ` @ ${escapeHtml(branchLabel)}` : ''}</span>`;
+    }).join('');
     setHtml('project-meta', metaHtml);
   }
 
@@ -126,9 +136,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Repo breakdown
     if (data.repoBreakdown && data.repoBreakdown.length > 0) {
-      const breakdownHtml = data.repoBreakdown.map(r =>
-        `<span>${escapeHtml(r.repoName)}: ${formatNumber(r.files)} files, ${formatNumber(r.tokens)} tokens</span>`
-      ).join('<br>');
+      const breakdownHtml = data.repoBreakdown.map(r => {
+        const sha = r.headSha ? ` @ <code>${escapeHtml(r.headSha.substring(0, 7))}</code>` : '';
+        return `<span>${escapeHtml(r.repoName)}: ${formatNumber(r.files)} files, ${formatNumber(r.tokens)} tokens${sha}</span>`;
+      }).join('<br>');
       setHtml('repo-breakdown', breakdownHtml);
     }
   }
@@ -170,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     hide('analyze-section');
     renderComponentTable(comps);
     show('step-2');
+    show('reanalyze-section');
     // Enable audit level cards (remove disabled state)
     enableCards();
     // Render mode cards with costs from scoped estimate (all components selected by default)
@@ -254,6 +266,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       setText('scoped-estimate-label', 'Failed to update estimate');
     }
   }
+
+  // ---- Re-analyze ----
+
+  const reanalyzeBtn = $('reanalyze-btn') as HTMLButtonElement | null;
+  reanalyzeBtn?.addEventListener('click', () => {
+    show('analyze-section');
+    hide('reanalyze-section');
+    updateAnalyzeButton();
+  });
 
   // ---- API Key ----
 
@@ -445,5 +466,129 @@ document.addEventListener('DOMContentLoaded', async () => {
     incrementalBtn?.classList.add('btn-secondary');
     incrementalBtn?.classList.remove('btn-primary');
     updateStartButton();
+  });
+
+  // ---- Branch Editor ----
+
+  const changeBranchesBtn = $('change-branches-btn') as HTMLButtonElement | null;
+  const branchEditor = $('branch-editor');
+  const branchEditorRepos = $('branch-editor-repos');
+  const applyBranchesBtn = $('apply-branches-btn') as HTMLButtonElement | null;
+  const cancelBranchesBtn = $('cancel-branches-btn') as HTMLButtonElement | null;
+
+  // Well-known branch names to prioritize
+  const WELL_KNOWN = ['main', 'master', 'stable', 'dev', 'development'];
+
+  function curateBranches(allBranches: string[], defaultBranch: string): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    if (allBranches.includes(defaultBranch)) {
+      result.push(defaultBranch);
+      seen.add(defaultBranch);
+    }
+    for (const name of WELL_KNOWN) {
+      if (!seen.has(name) && allBranches.includes(name)) {
+        result.push(name);
+        seen.add(name);
+      }
+    }
+    const remaining = allBranches.filter(b => !seen.has(b)).sort();
+    result.push(...remaining);
+    return result;
+  }
+
+  changeBranchesBtn?.addEventListener('click', async () => {
+    if (!branchEditor || !branchEditorRepos || !projectData) return;
+
+    branchEditorRepos.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><span>Loading branches...</span></div>';
+    show(branchEditor);
+    changeBranchesBtn.disabled = true;
+
+    try {
+      // Load branches for all repos in parallel
+      const branchResults = await Promise.all(
+        projectData.repos.map(async (repo) => {
+          const repoName = repo.repoName;
+          const result = await apiFetch<{ defaultBranch: string; branches: Array<{ name: string }> }>(
+            `/api/github/repos/${encodeURIComponent(projectData!.githubOrg)}/${encodeURIComponent(repoName)}/branches`
+          );
+          return {
+            repoId: repo.id,
+            repoName,
+            defaultBranch: result.defaultBranch,
+            currentBranch: repo.branch || result.defaultBranch,
+            branches: curateBranches(result.branches.map(b => b.name), result.defaultBranch),
+          };
+        })
+      );
+
+      // Render branch editor rows
+      branchEditorRepos.innerHTML = branchResults.map(r => {
+        const options = r.branches.map(b => {
+          const isDefault = b === r.defaultBranch;
+          const selected = b === r.currentBranch ? ' selected' : '';
+          return `<option value="${escapeHtml(b)}"${selected}>${escapeHtml(b)}${isDefault ? ' (default)' : ''}</option>`;
+        }).join('');
+
+        return `
+          <div class="branch-editor-row">
+            <span class="branch-editor-repo">${escapeHtml(r.repoName)}</span>
+            <select class="branch-editor-select" data-repo-id="${r.repoId}" data-default="${escapeHtml(r.defaultBranch)}">
+              ${options}
+            </select>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      branchEditorRepos.innerHTML = `<div class="notice notice-error">Failed to load branches: ${escapeHtml(err instanceof Error ? err.message : 'Unknown error')}</div>`;
+    }
+  });
+
+  cancelBranchesBtn?.addEventListener('click', () => {
+    if (branchEditor) hide(branchEditor);
+    if (changeBranchesBtn) changeBranchesBtn.disabled = false;
+  });
+
+  applyBranchesBtn?.addEventListener('click', async () => {
+    if (!applyBranchesBtn || !branchEditor) return;
+
+    applyBranchesBtn.disabled = true;
+    applyBranchesBtn.textContent = 'Applying...';
+
+    try {
+      // Collect branch selections
+      const selects = branchEditorRepos?.querySelectorAll<HTMLSelectElement>('.branch-editor-select');
+      const repos: Array<{ repoId: string; branch: string | null }> = [];
+      selects?.forEach(sel => {
+        const repoId = sel.dataset.repoId!;
+        const defaultBranch = sel.dataset.default || '';
+        const selected = sel.value;
+        repos.push({ repoId, branch: selected === defaultBranch ? null : selected });
+      });
+
+      // Update branches
+      await apiPut(`/api/projects/${projectId}/branches`, { repos });
+
+      // Re-run estimate to rescan at new branches
+      const [project, estimate] = await Promise.all([
+        apiFetch<ProjectData>(`/api/projects/${projectId}`),
+        apiPost<EstimateData>('/api/estimate', { projectId }),
+      ]);
+
+      projectData = project;
+      renderProjectHeader(project);
+      renderProjectStats(estimate);
+      renderEstimateCards(estimate);
+      updatePrecisionLabel(estimate);
+      estimateData = estimate;
+
+      hide(branchEditor);
+      if (changeBranchesBtn) changeBranchesBtn.disabled = false;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update branches');
+    } finally {
+      applyBranchesBtn.disabled = false;
+      applyBranchesBtn.textContent = 'Apply';
+    }
   });
 });

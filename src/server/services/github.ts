@@ -22,6 +22,16 @@ export interface GitHubRepo {
   html_url: string;
 }
 
+export interface GitHubEntity {
+  login: string;
+  type: 'User' | 'Organization';
+  avatarUrl: string;
+}
+
+export interface GitHubBranch {
+  name: string;
+}
+
 // ---------- Types (Ownership) ----------
 
 export interface OrgMembership {
@@ -190,6 +200,79 @@ export async function checkGitHubOwnership(
 
   const isOwner = membership.role === 'admin' && membership.state === 'active';
   return { isOwner, role: membership.role };
+}
+
+// ---------- Entity Info ----------
+
+export async function getGitHubEntity(name: string, token?: string): Promise<GitHubEntity> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(
+    `https://api.github.com/users/${encodeURIComponent(name)}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+  const body = await res.json() as { login: string; type: string; avatar_url: string };
+  return {
+    login: body.login,
+    type: body.type as 'User' | 'Organization',
+    avatarUrl: body.avatar_url,
+  };
+}
+
+// ---------- Repo Info ----------
+
+export async function getRepoDefaultBranch(
+  owner: string,
+  repo: string,
+  token?: string,
+): Promise<string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+  const body = await res.json() as { default_branch: string };
+  return body.default_branch;
+}
+
+// ---------- Repo Branches ----------
+
+export async function listRepoBranches(
+  owner: string,
+  repo: string,
+  token?: string,
+): Promise<GitHubBranch[]> {
+  const branches: GitHubBranch[] = [];
+  let page = 1;
+
+  while (true) {
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100&page=${page}`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+
+    const batch = await res.json() as Array<{ name: string }>;
+    branches.push(...batch.map(b => ({ name: b.name })));
+    if (batch.length < 100) break;
+    page++;
+  }
+
+  return branches;
 }
 
 // ---------- Commit Date (for shallow-since) ----------

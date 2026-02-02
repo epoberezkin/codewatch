@@ -18,6 +18,7 @@
             <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
             <div class="nav-right">
                 <div class="nav-links">
+                    <a href="/">New Audit</a>
                     <a href="/projects.html">Projects</a>
                 </div>
                 <button id="theme-toggle" aria-label="Toggle theme"></button>
@@ -54,12 +55,23 @@
 
         <!-- Project Overview (files, tokens, repo breakdown — no costs) -->
         <div class="card mb-2" id="project-stats">
-            <h3>Project Overview</h3>
+            <div class="flex-between">
+                <h3>Project Overview</h3>
+                <button class="btn btn-sm btn-secondary" id="change-branches-btn">Change Branches</button>
+            </div>
             <div class="audit-meta mt-1" id="stats-content">
                 <span id="stat-files">-- files</span>
                 <span id="stat-tokens">-- tokens</span>
             </div>
             <div id="repo-breakdown" class="mt-1 text-sm text-muted"></div>
+            <!-- Branch editor (hidden) -->
+            <div class="hidden mt-2" id="branch-editor">
+                <div id="branch-editor-repos"></div>
+                <div class="mt-1 flex gap-1">
+                    <button class="btn btn-sm btn-primary" id="apply-branches-btn">Apply</button>
+                    <button class="btn btn-sm btn-secondary" id="cancel-branches-btn">Cancel</button>
+                </div>
+            </div>
         </div>
 
         <!-- Audit Level Cards (costs on cards; disabled until component analysis complete) -->
@@ -111,6 +123,11 @@
                     <span id="analysis-progress">Analyzing components...</span>
                 </div>
             </div>
+        </div>
+
+        <!-- Re-analyze button (shown after component analysis) -->
+        <div class="hidden" id="reanalyze-section">
+            <button class="btn btn-sm btn-secondary mb-1" id="reanalyze-btn">Re-analyze Components</button>
         </div>
 
         <!-- Component Selection (hidden until analysis complete) -->

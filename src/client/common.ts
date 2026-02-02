@@ -73,6 +73,13 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return apiFetch<T>(path, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
 // ---------- DOM Helpers ----------
 
 function $(id: string): HTMLElement | null {

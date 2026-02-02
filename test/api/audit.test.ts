@@ -106,7 +106,13 @@ vi.mock('../../src/server/services/github', () => ({
   getOrgMembershipRole: async () => ({ role: 'admin', state: 'active' }),
   checkGitHubOwnership: async () => ({ isOwner: true }),
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
-  getCommitDate: async () => new Date('2025-01-15T12:00:00Z'),
+  getGitHubEntity: async () => ({
+    login: 'test-org', type: 'Organization',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/99999',
+  }),
+  listRepoBranches: async () => [{ name: 'main' }, { name: 'dev' }],
+  getRepoDefaultBranch: async () => 'main',
+  getCommitDate: async () => new Date('2025-01-01'),
 }));
 
 // Mock ownership service — uses hoisted state to control per-test ownership
@@ -604,7 +610,7 @@ describe('Audit API', () => {
       const projectId = await createProject(session);
       const auditId = await runFullAudit(session, projectId);
 
-      const res = await fetch(`${ctx.baseUrl}/api/audit/${auditId}/findings`);
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}/findings`, session.cookie);
       expect(res.status).toBe(200);
 
       const findings = await res.json();
@@ -664,7 +670,7 @@ describe('Audit API', () => {
       expect(commentId).toBeDefined();
 
       // List comments
-      const listRes = await fetch(`${ctx.baseUrl}/api/audit/${auditId}/comments`);
+      const listRes = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}/comments`, session.cookie);
       expect(listRes.status).toBe(200);
 
       const comments = await listRes.json();
@@ -793,7 +799,7 @@ describe('Audit API', () => {
       const auditId1 = await runFullAudit(session, projectId, 'full');
       const auditId2 = await runFullAudit(session, projectId, 'thorough');
 
-      const res = await fetch(`${ctx.baseUrl}/api/project/${projectId}/audits`);
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/project/${projectId}/audits`, session.cookie);
       expect(res.status).toBe(200);
 
       const audits = await res.json();

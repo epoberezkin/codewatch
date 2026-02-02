@@ -62,10 +62,16 @@ export async function cloneOrUpdate(
   if (fs.existsSync(path.join(localPath, '.git'))) {
     // Update existing
     const git = simpleGit(localPath);
+    if (branch) {
+      // Ensure the requested branch is tracked (may be a single-branch clone)
+      await git.raw(['remote', 'set-branches', '--add', 'origin', branch]);
+    }
     if (shallowSince) {
       // Incremental: deepen just enough to include the base commit
       const sinceStr = shallowSince.toISOString().split('T')[0]; // YYYY-MM-DD
       await git.fetch(['origin', `--shallow-since=${sinceStr}`]);
+    } else if (branch) {
+      await git.fetch(['origin', branch]);
     } else {
       await git.fetch('origin');
     }
@@ -80,6 +86,9 @@ export async function cloneOrUpdate(
     fs.mkdirSync(localPath, { recursive: true });
     const git = simpleGit();
     const cloneArgs = ['--single-branch'];
+    if (branch) {
+      cloneArgs.push('-b', branch);
+    }
     if (shallowSince) {
       // Incremental clone of a repo we don't have on disk yet
       const sinceStr = shallowSince.toISOString().split('T')[0];

@@ -34,6 +34,13 @@ vi.mock('../../src/server/services/github', () => ({
     mockGitHubState.issueBody = body;
     return { html_url: 'https://github.com/test-org/repo-alpha/issues/1' };
   },
+  getGitHubEntity: async () => ({
+    login: 'test-org', type: 'Organization',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/99999',
+  }),
+  listRepoBranches: async () => [{ name: 'main' }, { name: 'dev' }],
+  getRepoDefaultBranch: async () => 'main',
+  getCommitDate: async () => new Date('2025-01-01'),
 }));
 
 // Mock git service

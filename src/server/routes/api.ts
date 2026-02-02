@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { getPool } from '../db';
 import { requireAuth } from './auth';
-import { listOrgRepos, createIssue } from '../services/github';
-import { cloneOrUpdate, scanCodeFiles, repoLocalPath } from '../services/git';
+import { listOrgRepos, createIssue, getGitHubEntity, listRepoBranches, getRepoDefaultBranch } from '../services/github';
+import { cloneOrUpdate, scanCodeFiles, repoLocalPath, getDefaultBranchName } from '../services/git';
 import { estimateCosts, roughTokenCount, estimateCostsFromTokenCount, estimateCostsForComponents } from '../services/tokens';
 import { runAudit } from '../services/audit';
 import { countTokens } from '../services/claude';
@@ -57,17 +57,109 @@ router.get('/github/orgs/:org/repos', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/github/entity/:name — entity info (user or org)
+router.get('/github/entity/:name', async (req: Request, res: Response) => {
+  const name = req.params.name as string;
+  try {
+    // Use session token if available
+    const sessionId = req.cookies?.session;
+    let token: string | undefined;
+    let userId: string | null = null;
+    let githubUsername: string | null = null;
+    let hasOrgScope = false;
+
+    const pool = getPool();
+    if (sessionId) {
+      const { rows } = await pool.query(
+        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
+         FROM sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.id = $1 AND s.expires_at > NOW()`,
+        [sessionId]
+      );
+      if (rows.length > 0) {
+        token = rows[0].github_token;
+        userId = rows[0].user_id;
+        githubUsername = rows[0].github_username;
+        hasOrgScope = rows[0].has_org_scope;
+      }
+    }
+
+    const entity = await getGitHubEntity(name, token);
+
+    let isOwner: boolean | null = null;
+    let role: string | null = null;
+    let needsReauth = false;
+    if (userId && githubUsername) {
+      try {
+        const ownership = await resolveOwnership(
+          pool, userId, name,
+          githubUsername, token!, hasOrgScope,
+        );
+        isOwner = ownership.isOwner;
+        role = ownership.role || null;
+        needsReauth = ownership.needsReauth || false;
+      } catch { /* ignore */ }
+    }
+
+    res.json({ ...entity, isOwner, role, needsReauth });
+  } catch (err) {
+    console.error('Error fetching entity:', err);
+    res.status(500).json({ error: 'Failed to fetch GitHub entity' });
+  }
+});
+
+// GET /api/github/repos/:owner/:repo/branches — list branches
+router.get('/github/repos/:owner/:repo/branches', async (req: Request, res: Response) => {
+  const owner = req.params.owner as string;
+  const repo = req.params.repo as string;
+  try {
+    // Use session token if available
+    const sessionId = req.cookies?.session;
+    let token: string | undefined;
+    if (sessionId) {
+      const pool = getPool();
+      const { rows } = await pool.query(
+        'SELECT s.github_token FROM sessions s WHERE s.id = $1 AND s.expires_at > NOW()',
+        [sessionId]
+      );
+      if (rows.length > 0) token = rows[0].github_token;
+    }
+
+    const [branches, defaultBranch] = await Promise.all([
+      listRepoBranches(owner, repo, token),
+      getRepoDefaultBranch(owner, repo, token),
+    ]);
+    res.json({ defaultBranch, branches });
+  } catch (err) {
+    console.error('Error listing branches:', err);
+    res.status(500).json({ error: 'Failed to list branches' });
+  }
+});
+
 // ============================================================
 // Projects
 // ============================================================
 
 // POST /api/projects — create project with repos
+// Accepts either { githubOrg, repoNames: string[] } (legacy)
+// or { githubOrg, repos: [{name, branch?}] } (new format with branch selection)
 router.post('/projects', requireAuth as any, async (req: Request, res: Response) => {
-  const { githubOrg, repoNames } = req.body;
+  const { githubOrg } = req.body;
   const userId = (req as any).userId;
 
-  if (!githubOrg || !Array.isArray(repoNames) || repoNames.length === 0) {
-    res.status(400).json({ error: 'githubOrg and repoNames[] are required' });
+  // Normalize input: support both repoNames[] and repos[{name, branch?, defaultBranch?}]
+  let repoInputs: Array<{ name: string; branch?: string; defaultBranch?: string }>;
+  if (Array.isArray(req.body.repos) && req.body.repos.length > 0) {
+    repoInputs = req.body.repos;
+  } else if (Array.isArray(req.body.repoNames) && req.body.repoNames.length > 0) {
+    repoInputs = req.body.repoNames.map((n: string) => ({ name: n }));
+  } else {
+    res.status(400).json({ error: 'githubOrg and repos[] (or repoNames[]) are required' });
+    return;
+  }
+
+  if (!githubOrg) {
+    res.status(400).json({ error: 'githubOrg is required' });
     return;
   }
 
@@ -77,10 +169,15 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
     return;
   }
 
-  // Validate each repo name is a non-empty string with valid characters
-  for (const name of repoNames) {
+  // Validate each repo input
+  for (const input of repoInputs) {
+    const name = input.name;
     if (typeof name !== 'string' || name.length === 0 || !/^[a-zA-Z0-9._-]+$/.test(name)) {
       res.status(400).json({ error: `Invalid repository name: ${typeof name === 'string' ? name : '(non-string)'}` });
+      return;
+    }
+    if (input.branch !== undefined && (typeof input.branch !== 'string' || input.branch.length === 0)) {
+      res.status(400).json({ error: `Invalid branch for ${name}` });
       return;
     }
   }
@@ -88,6 +185,23 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
   const pool = getPool();
 
   try {
+    // Check for duplicate: same org + same repos (sorted) by the same user
+    const sortedNames = repoInputs.map(r => r.name).sort().join(',');
+    const { rows: existingProjects } = await pool.query(
+      `SELECT p.id FROM projects p
+       WHERE p.github_org = $1 AND p.created_by = $2
+       AND (
+         SELECT string_agg(r.repo_name, ',' ORDER BY r.repo_name)
+         FROM project_repos pr JOIN repositories r ON r.id = pr.repo_id
+         WHERE pr.project_id = p.id
+       ) = $3`,
+      [githubOrg, userId, sortedNames]
+    );
+    if (existingProjects.length > 0) {
+      res.json({ projectId: existingProjects[0].id, existing: true });
+      return;
+    }
+
     // Create project
     const projectName = githubOrg; // Default name to org name
     const { rows: projectRows } = await pool.query(
@@ -100,29 +214,30 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
 
     // Create/get repos and link to project
     const repos = [];
-    for (const repoName of repoNames) {
-      const repoUrl = `https://github.com/${githubOrg}/${repoName}`;
+    for (const input of repoInputs) {
+      const repoUrl = `https://github.com/${githubOrg}/${input.name}`;
       const repoPath = repoLocalPath(repoUrl);
 
-      // Upsert repository
+      // Upsert repository (include default_branch if provided by client)
       const { rows: repoRows } = await pool.query(
-        `INSERT INTO repositories (repo_url, github_org, repo_name, repo_path)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO repositories (repo_url, github_org, repo_name, repo_path, default_branch)
+         VALUES ($1, $2, $3, $4, COALESCE($5, 'main'))
          ON CONFLICT (repo_url) DO UPDATE SET
            github_org = $2,
-           repo_name = $3
+           repo_name = $3,
+           default_branch = COALESCE($5, repositories.default_branch)
          RETURNING id`,
-        [repoUrl, githubOrg, repoName, repoPath]
+        [repoUrl, githubOrg, input.name, repoPath, input.defaultBranch || null]
       );
       const repoId = repoRows[0].id;
 
-      // Link to project
+      // Link to project with optional branch
       await pool.query(
-        'INSERT INTO project_repos (project_id, repo_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [projectId, repoId]
+        'INSERT INTO project_repos (project_id, repo_id, branch) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        [projectId, repoId, input.branch || null]
       );
 
-      repos.push({ id: repoId, repoName, repoUrl });
+      repos.push({ id: repoId, repoName: input.name, repoUrl, branch: input.branch || null });
     }
 
     // Resolve ownership for creator using session values from requireAuth middleware
@@ -332,10 +447,10 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
       }
     }
 
-    // Get repos with license
+    // Get repos with license + branch
     const { rows: repos } = await pool.query(
       `SELECT r.id, r.repo_name, r.repo_url, r.language, r.stars, r.description,
-              r.total_files, r.total_tokens, r.default_branch, r.license
+              r.total_files, r.total_tokens, r.default_branch, r.license, pr.branch
        FROM repositories r
        JOIN project_repos pr ON pr.repo_id = r.id
        WHERE pr.project_id = $1
@@ -453,6 +568,7 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
         totalFiles: r.total_files,
         totalTokens: r.total_tokens,
         defaultBranch: r.default_branch,
+        branch: r.branch || null,
         license: r.license || null,
       })),
       components: components.map(c => ({
@@ -485,12 +601,73 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/projects/:id/branches — update branch selections for project repos
+router.put('/projects/:id/branches', requireAuth as any, async (req: Request, res: Response) => {
+  const projectId = req.params.id;
+  const userId = (req as any).userId;
+  const { repos: repoUpdates } = req.body;
+
+  if (!Array.isArray(repoUpdates) || repoUpdates.length === 0) {
+    res.status(400).json({ error: 'repos[] is required' });
+    return;
+  }
+
+  const pool = getPool();
+
+  try {
+    // Verify project exists and user has access (creator or owner)
+    const { rows: proj } = await pool.query(
+      'SELECT id, created_by, github_org FROM projects WHERE id = $1',
+      [projectId]
+    );
+    if (proj.length === 0) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    const isCreator = proj[0].created_by === userId;
+    if (!isCreator) {
+      const branchOwnership = await resolveOwnership(
+        pool, userId, proj[0].github_org,
+        (req as any).githubUsername, (req as any).githubToken, (req as any).hasOrgScope,
+      );
+      if (!branchOwnership.isOwner) {
+        res.status(403).json({ error: 'Only the project creator or owner can change branches' });
+        return;
+      }
+    }
+
+    // Validate and update each repo's branch
+    for (const update of repoUpdates) {
+      if (!update.repoId) {
+        res.status(400).json({ error: 'Each repo update must have repoId' });
+        return;
+      }
+      if (update.branch !== undefined && update.branch !== null &&
+          (typeof update.branch !== 'string' || update.branch.length === 0)) {
+        res.status(400).json({ error: `Invalid branch for repo ${update.repoId}` });
+        return;
+      }
+
+      await pool.query(
+        'UPDATE project_repos SET branch = $1 WHERE project_id = $2 AND repo_id = $3',
+        [update.branch || null, projectId, update.repoId]
+      );
+    }
+
+    res.json({ updated: true });
+  } catch (err) {
+    console.error('Error updating branches:', err);
+    res.status(500).json({ error: 'Failed to update branches' });
+  }
+});
+
 // ============================================================
 // Estimation
 // ============================================================
 
 // POST /api/estimate — rough estimation
-router.post('/estimate', requireAuth as any, async (req: Request, res: Response) => {
+router.post('/estimate', async (req: Request, res: Response) => {
   const { projectId } = req.body;
   if (!projectId) {
     res.status(400).json({ error: 'projectId is required' });
@@ -500,9 +677,9 @@ router.post('/estimate', requireAuth as any, async (req: Request, res: Response)
   const pool = getPool();
 
   try {
-    // Get project repos
+    // Get project repos with branch selection
     const { rows: repos } = await pool.query(
-      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, r.default_branch
+      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, r.default_branch, pr.branch
        FROM repositories r
        JOIN project_repos pr ON pr.repo_id = r.id
        WHERE pr.project_id = $1`,
@@ -515,15 +692,29 @@ router.post('/estimate', requireAuth as any, async (req: Request, res: Response)
     }
 
     // Clone/update each repo and scan files
-    const repoBreakdown = [];
+    const repoBreakdown: Array<{ repoName: string; files: number; tokens: number; headSha?: string; branch?: string }> = [];
     const cloneErrors: Array<{ repoName: string; error: string }> = [];
     const allFiles: ScannedFile[] = [];
 
     for (const repo of repos) {
       let files: ScannedFile[];
+      let repoHeadSha: string | undefined;
+      const repoBranch = repo.branch || repo.default_branch || undefined;
       try {
-        const { localPath, headSha } = await cloneOrUpdate(repo.repo_url);
+        const { localPath, headSha } = await cloneOrUpdate(repo.repo_url, repo.branch || undefined);
+        repoHeadSha = headSha;
         files = scanCodeFiles(localPath);
+
+        // Detect actual default branch from cloned repo and update DB
+        try {
+          const detectedDefault = await getDefaultBranchName(localPath);
+          if (detectedDefault && detectedDefault !== repo.default_branch) {
+            await pool.query(
+              'UPDATE repositories SET default_branch = $1 WHERE id = $2',
+              [detectedDefault, repo.id]
+            );
+          }
+        } catch { /* ignore — non-critical */ }
 
         // Namespace file paths with repo name
         files = files.map(f => ({
@@ -550,6 +741,8 @@ router.post('/estimate', requireAuth as any, async (req: Request, res: Response)
         repoName: repo.repo_name,
         files: files.length,
         tokens,
+        headSha: repoHeadSha,
+        branch: repoBranch,
       });
       allFiles.push(...files);
     }
@@ -601,7 +794,7 @@ router.post('/estimate', requireAuth as any, async (req: Request, res: Response)
 });
 
 // POST /api/estimate/precise — precise estimation using count_tokens API
-router.post('/estimate/precise', requireAuth as any, async (req: Request, res: Response) => {
+router.post('/estimate/precise', async (req: Request, res: Response) => {
   const { projectId } = req.body;
   if (!projectId) {
     res.status(400).json({ error: 'projectId is required' });
@@ -616,9 +809,9 @@ router.post('/estimate/precise', requireAuth as any, async (req: Request, res: R
   const pool = getPool();
 
   try {
-    // Get project repos
+    // Get project repos with branch selection
     const { rows: repos } = await pool.query(
-      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, r.default_branch
+      `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, r.default_branch, pr.branch
        FROM repositories r
        JOIN project_repos pr ON pr.repo_id = r.id
        WHERE pr.project_id = $1`,
@@ -640,7 +833,7 @@ router.post('/estimate/precise', requireAuth as any, async (req: Request, res: R
     for (const repo of repos) {
       let files: ScannedFile[];
       try {
-        const { localPath } = await cloneOrUpdate(repo.repo_url);
+        const { localPath } = await cloneOrUpdate(repo.repo_url, repo.branch || undefined);
         repoLocalPaths.set(repo.repo_name, localPath);
         files = scanCodeFiles(localPath);
         files = files.map(f => ({
@@ -733,7 +926,7 @@ router.post('/estimate/precise', requireAuth as any, async (req: Request, res: R
 });
 
 // POST /api/estimate/components — scoped cost estimates for selected components
-router.post('/estimate/components', requireAuth as any, async (req: Request, res: Response) => {
+router.post('/estimate/components', async (req: Request, res: Response) => {
   const { projectId, componentIds } = req.body;
 
   if (!projectId) {
@@ -1815,14 +2008,14 @@ As the project owner, you have full access to all findings. Visit CodeWatch to v
 
     // Compute publishable_after based on max severity
     const maxSev = audit.max_severity || 'none';
-    let publishableAfter: Date;
+    let publishableAfter: Date | null;
     if (maxSev === 'critical') {
       publishableAfter = new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000); // 6 months
     } else if (maxSev === 'high' || maxSev === 'medium') {
       publishableAfter = new Date(Date.now() + 3 * 30 * 24 * 60 * 60 * 1000); // 3 months
     } else {
-      // low/informational/none: immediate auto-publish
-      publishableAfter = new Date();
+      // low/informational/none: no time-gate needed
+      publishableAfter = null;
     }
 
     await pool.query(
@@ -1831,7 +2024,7 @@ As the project owner, you have full access to all findings. Visit CodeWatch to v
       [publishableAfter, auditId]
     );
 
-    res.json({ ok: true, publishableAfter });
+    res.json({ ok: true, publishableAfter: publishableAfter });
   } catch (err) {
     console.error('Error notifying owner:', err);
     res.status(500).json({ error: 'Failed to notify owner' });
@@ -1993,9 +2186,9 @@ router.post('/projects/:id/analyze-components', requireAuth as any, async (req: 
       return;
     }
 
-    // Get repos
+    // Get repos with branch selection
     const { rows: repos } = await pool.query(
-      `SELECT r.id, r.repo_url, r.repo_name
+      `SELECT r.id, r.repo_url, r.repo_name, pr.branch
        FROM repositories r
        JOIN project_repos pr ON pr.repo_id = r.id
        WHERE pr.project_id = $1`,
@@ -2010,7 +2203,7 @@ router.post('/projects/:id/analyze-components', requireAuth as any, async (req: 
     // Clone/update repos and scan files
     const repoData: RepoInfo[] = [];
     for (const repo of repos) {
-      const { localPath } = await cloneOrUpdate(repo.repo_url);
+      const { localPath } = await cloneOrUpdate(repo.repo_url, repo.branch || undefined);
       const files = scanCodeFiles(localPath);
       repoData.push({
         id: repo.id,

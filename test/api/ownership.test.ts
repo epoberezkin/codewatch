@@ -30,6 +30,13 @@ vi.mock('../../src/server/services/github', () => ({
     return mockGitHubState.ownershipResult;
   },
   createIssue: async () => ({ html_url: 'https://github.com/test/test/issues/1' }),
+  getGitHubEntity: async () => ({
+    login: 'test-org', type: 'Organization',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/99999',
+  }),
+  listRepoBranches: async () => [{ name: 'main' }, { name: 'dev' }],
+  getRepoDefaultBranch: async () => 'main',
+  getCommitDate: async () => new Date('2025-01-01'),
 }));
 
 // Mock git service for project creation

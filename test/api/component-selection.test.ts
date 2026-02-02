@@ -122,7 +122,7 @@ describe('Component selection & supply chain', () => {
       const res = await fetch(`${ctx.baseUrl}/api/estimate/components`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, componentIds: [componentIds[0]] }),
+        body: JSON.stringify({ projectId, componentIds: [componentIds[0]], totalTokens: 3500 }),
       });
       expect(res.status).toBe(200);
 
@@ -141,7 +141,7 @@ describe('Component selection & supply chain', () => {
       const res = await fetch(`${ctx.baseUrl}/api/estimate/components`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, componentIds: [] }),
+        body: JSON.stringify({ projectId, componentIds: [], totalTokens: 3500 }),
       });
       expect(res.status).toBe(200);
 
@@ -159,7 +159,7 @@ describe('Component selection & supply chain', () => {
       const res = await fetch(`${ctx.baseUrl}/api/estimate/components`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, componentIds }),
+        body: JSON.stringify({ projectId, componentIds, totalTokens: 3500 }),
       });
       expect(res.status).toBe(200);
 
@@ -178,6 +178,7 @@ describe('Component selection & supply chain', () => {
         body: JSON.stringify({
           projectId,
           componentIds: ['00000000-0000-0000-0000-000000000000'],
+          totalTokens: 3500,
         }),
       });
       expect(res.status).toBe(400);
@@ -203,6 +204,7 @@ describe('Component selection & supply chain', () => {
         body: JSON.stringify({
           projectId: '00000000-0000-0000-0000-000000000000',
           componentIds: [],
+          totalTokens: 3500,
         }),
       });
       expect(res.status).toBe(404);

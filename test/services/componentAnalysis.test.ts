@@ -599,9 +599,9 @@ describe('Component analysis service', () => {
       expect(rows[0].input_tokens_used).toBe(2500);  // 1000 + 1500
       expect(rows[0].output_tokens_used).toBe(700);   // 200 + 500
 
-      // Verify cost: (2500/1M * $3) + (700/1M * $15) = 0.0075 + 0.0105 = 0.018
+      // Verify cost: (2500/1M * $5) + (700/1M * $25) = 0.0125 + 0.0175 = 0.03
       const cost = parseFloat(rows[0].cost_usd);
-      expect(cost).toBeCloseTo(0.018, 4);
+      expect(cost).toBeCloseTo(0.03, 4);
     });
 
     it('handles analysis failure gracefully', async () => {

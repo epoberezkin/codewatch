@@ -398,4 +398,170 @@ describe('Ownership', () => {
       expect(rows).toHaveLength(0);
     });
   });
+
+  // ============================================================
+  // Audit status endpoint — isOwner and isRequester
+  // ============================================================
+
+  describe('Audit status — isOwner and isRequester', () => {
+    it('GET /api/audit/:id returns isOwner=true for org admin', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await insertAudit(projectId, session.userId);
+
+      mockGitHubState.ownershipResult = { isOwner: true };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}`, session.cookie);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.isOwner).toBe(true);
+      expect(data.isRequester).toBe(true); // also the requester
+    });
+
+    it('GET /api/audit/:id returns isOwner=false for non-owner', async () => {
+      const owner = await createTestSession(ctx.pool);
+      const projectId = await createProject(owner);
+      const auditId = await insertAudit(projectId, owner.userId);
+
+      const other = await createTestSession(ctx.pool);
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [other.userId]);
+      mockGitHubState.ownershipResult = { isOwner: false };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}`, other.cookie);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.isOwner).toBe(false);
+      expect(data.isRequester).toBe(false); // different user
+    });
+
+    it('GET /api/audit/:id returns isRequester=true for audit requester who is not owner', async () => {
+      const owner = await createTestSession(ctx.pool);
+      const projectId = await createProject(owner);
+
+      // Different user creates the audit (they're the requester)
+      const requester = await createTestSession(ctx.pool);
+      const auditId = await insertAudit(projectId, requester.userId, false);
+
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [requester.userId]);
+      mockGitHubState.ownershipResult = { isOwner: false };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}`, requester.cookie);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.isOwner).toBe(false);
+      expect(data.isRequester).toBe(true);
+    });
+
+    it('GET /api/audit/:id returns githubOrg from project', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await insertAudit(projectId, session.userId);
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}`, session.cookie);
+      const data = await res.json();
+      expect(data.githubOrg).toBe('test-org');
+    });
+  });
+
+  // ============================================================
+  // Report access tier
+  // ============================================================
+
+  describe('Report access tier', () => {
+    it('returns accessTier=owner for project owner', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await insertAudit(projectId, session.userId);
+      await insertFinding(auditId);
+
+      // Add report_summary so the endpoint returns it
+      await ctx.pool.query(
+        `UPDATE audits SET report_summary = $1 WHERE id = $2`,
+        [JSON.stringify({ executive_summary: 'Test', security_posture: 'OK', responsible_disclosure: {} }), auditId]
+      );
+
+      mockGitHubState.ownershipResult = { isOwner: true };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}/report`, session.cookie);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.accessTier).toBe('owner');
+      expect(data.isOwner).toBe(true);
+      expect(data.redactionNotice).toBeNull();
+      // All findings should be visible with full details
+      expect(data.findings).toHaveLength(1);
+      expect(data.findings[0].title).toBe('Test Finding');
+    });
+
+    it('returns accessTier=requester for audit requester who is not owner', async () => {
+      const owner = await createTestSession(ctx.pool);
+      const projectId = await createProject(owner);
+
+      const requester = await createTestSession(ctx.pool);
+      const auditId = await insertAudit(projectId, requester.userId, false);
+      await insertFinding(auditId);
+
+      await ctx.pool.query(
+        `UPDATE audits SET report_summary = $1 WHERE id = $2`,
+        [JSON.stringify({ executive_summary: 'Test', security_posture: 'OK', responsible_disclosure: {} }), auditId]
+      );
+
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [requester.userId]);
+      mockGitHubState.ownershipResult = { isOwner: false };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/audit/${auditId}/report`, requester.cookie);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.accessTier).toBe('requester');
+      expect(data.redactionNotice).toBeTruthy();
+      // High finding should be redacted (title=null)
+      expect(data.findings).toHaveLength(1);
+      expect(data.findings[0].severity).toBe('high');
+      expect(data.findings[0].title).toBeNull();
+    });
+
+    it('returns accessTier=owner for public audit viewed anonymously', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await insertAudit(projectId, session.userId);
+      await insertFinding(auditId);
+
+      // Make audit public
+      await ctx.pool.query('UPDATE audits SET is_public = true WHERE id = $1', [auditId]);
+      await ctx.pool.query(
+        `UPDATE audits SET report_summary = $1 WHERE id = $2`,
+        [JSON.stringify({ executive_summary: 'Test', security_posture: 'OK', responsible_disclosure: {} }), auditId]
+      );
+
+      // Anonymous request (no cookie)
+      const res = await fetch(`${ctx.baseUrl}/api/audit/${auditId}/report`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      // Public audits get full access (resolveAccessTier returns 'owner' for is_public)
+      expect(data.accessTier).toBe('owner');
+      expect(data.findings).toHaveLength(1);
+      expect(data.findings[0].title).toBe('Test Finding');
+    });
+
+    it('returns accessTier=public for non-public audit viewed anonymously', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await insertAudit(projectId, session.userId);
+      await insertFinding(auditId);
+
+      await ctx.pool.query(
+        `UPDATE audits SET report_summary = $1 WHERE id = $2`,
+        [JSON.stringify({ executive_summary: 'Test', security_posture: 'OK', responsible_disclosure: {} }), auditId]
+      );
+
+      // Anonymous request on non-public audit
+      const res = await fetch(`${ctx.baseUrl}/api/audit/${auditId}/report`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.accessTier).toBe('public');
+      expect(data.redactionNotice).toBeTruthy();
+      // Public tier: no individual findings
+      expect(data.findings).toHaveLength(0);
+    });
+  });
 });

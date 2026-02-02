@@ -165,13 +165,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
   }
 
-  function renderOwnershipBadge(ownership: { isOwner: boolean; needsReauth: boolean }): string {
-    if (ownership.isOwner) {
-      return '<span class="badge badge-completed">owner</span>';
-    }
-    if (ownership.needsReauth) {
-      return '<span class="badge badge-pending">re-auth needed</span>';
-    }
-    return '';
-  }
+  // Uses shared renderOwnershipBadge() from common.ts
 });

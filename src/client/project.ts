@@ -100,10 +100,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (project.ownership) {
       const badgeEl = $('ownership-badge');
       if (badgeEl) {
-        if (project.ownership.isOwner) {
-          badgeEl.innerHTML = '<span class="badge badge-completed">owner</span>';
-        } else if (project.ownership.needsReauth) {
+        if (project.ownership.needsReauth && !project.ownership.isOwner) {
           badgeEl.innerHTML = `<a href="/auth/github?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}" class="badge badge-pending" style="text-decoration: none;">re-auth needed</a>`;
+        } else {
+          badgeEl.innerHTML = renderOwnershipBadge(project.ownership);
         }
       }
     }

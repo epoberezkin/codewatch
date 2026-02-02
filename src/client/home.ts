@@ -137,14 +137,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const ownerBadge = $('owner-badge');
     const memberBadge = $('member-badge');
+    const reauthBadge = $('reauth-badge');
 
     if (ownerBadge && memberBadge) {
       hide(ownerBadge);
       hide(memberBadge);
+      if (reauthBadge) hide(reauthBadge);
       if (entity.isOwner === true) {
         show(ownerBadge);
       } else if (entity.role === 'member') {
         show(memberBadge);
+      } else if (entity.needsReauth && reauthBadge) {
+        show(reauthBadge);
       }
     }
   }
@@ -234,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await apiFetch<{ defaultBranch: string; branches: Array<{ name: string }> }>(
           `/api/github/repos/${encodeURIComponent(parsedOwner)}/${encodeURIComponent(repoName)}/branches`
         );
-        branches = curateBranches(result.branches.map(b => b.name), result.defaultBranch);
+        branches = result.branches.map(b => b.name);
         branchCache.set(repoName, branches);
 
         // Update default branch if we got it from the API

@@ -128,6 +128,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
+    // Access tier badge
+    setHtml('access-tier-badge', renderAccessTierBadge(data.accessTier));
+
     // Severity summary
     const sevOrder = ['critical', 'high', 'medium', 'low', 'informational'];
     const sevHtml = sevOrder

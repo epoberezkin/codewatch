@@ -10,9 +10,9 @@ import { loadPrompt, renderPrompt } from './prompts';
 
 // ---------- Constants ----------
 
-const SONNET_MODEL = 'claude-sonnet-4-5-20250929';
-const SONNET_INPUT_PRICE = 3;   // $/Mtok
-const SONNET_OUTPUT_PRICE = 15;  // $/Mtok
+const ANALYSIS_MODEL = 'claude-opus-4-5-20251101';
+const ANALYSIS_INPUT_PRICE = 5;   // $/Mtok
+const ANALYSIS_OUTPUT_PRICE = 25;  // $/Mtok
 const MAX_TURNS = 40;
 const MAX_RETRIES = 5;
 const MAX_READ_LINES = 500;
@@ -124,7 +124,7 @@ async function createMessageWithRetry(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await client.messages.create({
-        model: SONNET_MODEL,
+        model: ANALYSIS_MODEL,
         max_tokens: 16384,
         system,
         tools,
@@ -220,8 +220,8 @@ export async function runComponentAnalysis(
       turnsUsed++;
       inputTokensUsed += response.usage.input_tokens;
       outputTokensUsed += response.usage.output_tokens;
-      const costUsd = (inputTokensUsed / 1_000_000) * SONNET_INPUT_PRICE +
-                       (outputTokensUsed / 1_000_000) * SONNET_OUTPUT_PRICE;
+      const costUsd = (inputTokensUsed / 1_000_000) * ANALYSIS_INPUT_PRICE +
+                       (outputTokensUsed / 1_000_000) * ANALYSIS_OUTPUT_PRICE;
 
       // Update progress in DB (every 3 turns to reduce DB roundtrips)
       if (turnsUsed % 3 === 0 || response.stop_reason === 'end_turn') {
@@ -252,8 +252,8 @@ export async function runComponentAnalysis(
         await storeResults(pool, projectId, analysisId, result, repoData);
 
         // Mark completed
-        const finalCost = (inputTokensUsed / 1_000_000) * SONNET_INPUT_PRICE +
-                           (outputTokensUsed / 1_000_000) * SONNET_OUTPUT_PRICE;
+        const finalCost = (inputTokensUsed / 1_000_000) * ANALYSIS_INPUT_PRICE +
+                           (outputTokensUsed / 1_000_000) * ANALYSIS_OUTPUT_PRICE;
         await pool.query(
           `UPDATE component_analyses
            SET status = 'completed', completed_at = NOW(), cost_usd = $1

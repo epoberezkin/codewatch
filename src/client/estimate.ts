@@ -24,6 +24,7 @@ interface ProjectData {
   githubOrg: string;
   category: string;
   createdBy: string | null;
+  ownership: { isOwner: boolean; role: string | null; needsReauth: boolean } | null;
   repos: Array<{
     id: string;
     repoName: string;
@@ -68,6 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let selectedLevel: string | null = null;
   let estimateData: EstimateData | null = null;
+  let projectTotalTokens = 0;
   let useIncremental = false;
   let baseAuditId: string | null = null;
   const selectedComponentIds = new Set<string>();
@@ -86,7 +88,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderProjectStats(estimate);
     renderEstimateCards(estimate);
     updatePrecisionLabel(estimate);
+    updateAnalysisCostHint(estimate);
     estimateData = estimate;
+    projectTotalTokens = estimate.totalTokens;
 
     if (estimate.cloneErrors && estimate.cloneErrors.length > 0) {
       const errList = estimate.cloneErrors
@@ -101,10 +105,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       baseAuditId = estimate.previousAudit.id;
     }
 
-    // Show non-owner notice if user is not the project creator
+    // Show ownership badge and access tier preview
     const user = currentUser;
-    if (user && project.createdBy && user.id !== project.createdBy) {
+    if (project.ownership) {
+      setHtml('ownership-badge', renderOwnershipBadge(project.ownership));
+    }
+    if (project.ownership?.isOwner) {
+      setHtml('access-tier-preview',
+        '<strong>Full access</strong> — you\'ll see complete findings as the project owner.');
+      show('access-tier-preview');
+    } else if (project.ownership?.needsReauth) {
+      setHtml('access-tier-preview',
+        '<strong>Ownership unverified</strong> — <a href="/auth/github">re-authenticate with GitHub</a> to verify org ownership and get full access.');
+      show('access-tier-preview');
+    } else if (user) {
       show('non-owner-notice');
+      setHtml('access-tier-preview',
+        '<strong>Redacted access</strong> — medium and above findings will show severity counts only. Full details available after responsible disclosure period.');
+      show('access-tier-preview');
     }
 
     // Check for existing components — if found, skip to step 2
@@ -160,6 +178,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       const est = data.estimates[level];
       setHtml(`price-${level}`, `${formatUSD(est.costUsd)} <small>estimated</small>`);
     }
+  }
+
+  function updateAnalysisCostHint(data: EstimateData) {
+    // Component analysis uses ~5% of total project tokens (same as OVERHEAD_MULTIPLIER in tokens.ts)
+    const analysisTokens = data.totalTokens * 0.05;
+    const inputCost = (analysisTokens / 1_000_000) * 5;    // Opus 4.5: $5/Mtok input
+    const outputCost = (analysisTokens * 0.15 / 1_000_000) * 25; // ~15% output ratio, $25/Mtok
+    const cost = inputCost + outputCost;
+    setText('analysis-cost-hint', `~${formatUSD(cost)} for analysis`);
   }
 
   // ---- Component Loading ----
@@ -257,6 +284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const scoped = await apiPost<EstimateData>('/api/estimate/components', {
         projectId,
         componentIds: Array.from(selectedComponentIds),
+        totalTokens: projectTotalTokens,
       });
       renderEstimateCards(scoped);
       estimateData = scoped;
@@ -270,8 +298,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Re-analyze ----
 
-  const reanalyzeBtn = $('reanalyze-btn') as HTMLButtonElement | null;
-  reanalyzeBtn?.addEventListener('click', () => {
+  const reanalyzeBtn = $('reanalyze-btn') as HTMLAnchorElement | null;
+  reanalyzeBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
     show('analyze-section');
     hide('reanalyze-section');
     updateAnalyzeButton();
@@ -418,7 +447,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const precise = await apiPost<EstimateData>('/api/estimate/precise', { projectId });
       renderEstimateCards(precise);
       updatePrecisionLabel(precise);
+      updateAnalysisCostHint(precise);
       estimateData = precise;
+      projectTotalTokens = precise.totalTokens;
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Failed to get precise estimate');
     } finally {
@@ -551,7 +582,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             repoName,
             defaultBranch: result.defaultBranch,
             currentBranch: repo.branch || result.defaultBranch,
-            branches: curateBranches(result.branches.map(b => b.name), result.defaultBranch),
+            branches: result.branches.map(b => b.name),
           };
         })
       );

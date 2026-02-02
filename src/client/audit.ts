@@ -6,9 +6,13 @@
 interface AuditStatus {
   id: string;
   projectId: string;
+  projectName: string;
+  githubOrg: string;
   status: string;
   auditLevel: string;
   isIncremental: boolean;
+  isOwner: boolean;
+  isRequester: boolean;
   totalFiles: number;
   filesToAnalyze: number;
   filesAnalyzed: number;
@@ -77,6 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     setHtml('audit-status-badge', `<span class="badge ${statusMap[data.status] || ''}">${escapeHtml(data.status)}</span>`);
     setText('audit-level', data.auditLevel);
+
+    // Ownership badge
+    if (data.isOwner) {
+      setHtml('audit-owner-badge', renderOwnershipBadge({ isOwner: true }));
+    }
 
     // Commit info
     if (data.commits.length > 0) {

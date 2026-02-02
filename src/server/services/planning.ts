@@ -8,11 +8,7 @@ import { BUDGET_PERCENTAGES } from './tokens';
 
 // ---------- Constants ----------
 
-const SONNET_MODEL = 'claude-sonnet-4-5-20250929';
-
-// Planning phase budget: ~5% of the audit's token budget
-// Uses Sonnet 4.5 ($3/$15 per Mtok) for cost efficiency
-const PLANNING_MODEL = SONNET_MODEL;
+const PLANNING_MODEL = 'claude-opus-4-5-20251101';
 
 // ---------- Types ----------
 
@@ -305,9 +301,9 @@ export async function runPlanningPhase(
     [JSON.stringify(plan), auditId]
   );
 
-  // Calculate planning cost from actual token usage (Sonnet 4.5: $3/$15 per Mtok)
+  // Calculate planning cost from actual token usage (Opus 4.5: $5/$25 per Mtok)
   const planningCostUsd =
-    (planningResult.inputTokens / 1_000_000) * 3 + (planningResult.outputTokens / 1_000_000) * 15;
+    (planningResult.inputTokens / 1_000_000) * 5 + (planningResult.outputTokens / 1_000_000) * 25;
 
   return { plan, planningCostUsd };
 }

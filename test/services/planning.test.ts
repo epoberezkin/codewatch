@@ -290,7 +290,7 @@ describe('Planning service', () => {
       expect(mockClaudeState.lastMessage).toContain('Handles authentication');
       expect(mockClaudeState.lastMessage).toContain('Admin');
       expect(mockClaudeState.lastMessage).toContain('thorough');
-      expect(mockClaudeState.lastModel).toBe('claude-sonnet-4-5-20250929');
+      expect(mockClaudeState.lastModel).toBe('claude-opus-4-5-20251101');
 
       // Verify parsed result
       expect(result.rankedFiles).toHaveLength(2);

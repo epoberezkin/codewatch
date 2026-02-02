@@ -142,10 +142,15 @@ router.get('/github/repos/:owner/:repo/branches', async (req: Request, res: Resp
     const session = await getSessionInfo(pool, req.cookies?.session);
     const token = session?.githubToken;
 
-    const [branches, defaultBranch] = await Promise.all([
+    const [allBranches, defaultBranch] = await Promise.all([
       listRepoBranches(owner, repo, token),
       getRepoDefaultBranch(owner, repo, token),
     ]);
+    // Put default branch first so the client can use the array as-is
+    const branches = [
+      ...allBranches.filter(b => b.name === defaultBranch),
+      ...allBranches.filter(b => b.name !== defaultBranch),
+    ];
     res.json({ defaultBranch, branches });
   } catch (err) {
     console.error('Error listing branches:', err);
@@ -359,16 +364,20 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
       pool.query(sevQuery, baseParams),
     ]);
 
-    // Resolve ownership only for user's own projects (avoid unnecessary GitHub API calls)
-    const resolvedProjects = await Promise.all(projects.map(async (p) => {
-      let ownership = undefined;
-      if (userId && p.created_by === userId && githubUsername && githubToken) {
+    // Resolve ownership per unique org (deduplicated to minimize GitHub API calls)
+    const orgOwnership = new Map<string, { isOwner: boolean; role: string | null; needsReauth: boolean }>();
+    if (userId && githubUsername && githubToken) {
+      const uniqueOrgs = [...new Set(projects.map(p => p.github_org))];
+      await Promise.all(uniqueOrgs.map(async (org) => {
         try {
-          const result = await resolveOwnership(pool, userId, p.github_org, githubUsername, githubToken, hasOrgScope);
-          ownership = { isOwner: result.isOwner, role: result.role || null, needsReauth: result.needsReauth || false };
+          const result = await resolveOwnership(pool, userId, org, githubUsername, githubToken, hasOrgScope);
+          orgOwnership.set(org, { isOwner: result.isOwner, role: result.role || null, needsReauth: result.needsReauth || false });
         } catch { /* ignore */ }
-      }
+      }));
+    }
 
+    const resolvedProjects = projects.map((p) => {
+      const ownership = orgOwnership.get(p.github_org);
       return {
         id: p.id,
         name: p.name,
@@ -383,7 +392,7 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
         createdAt: p.created_at,
         ...(ownership ? { ownership } : {}),
       };
-    }));
+    });
 
     const severityOrder = ['critical', 'high', 'medium', 'low', 'informational'];
     const severities = sevRows
@@ -933,7 +942,7 @@ router.post('/estimate/precise', async (req: Request, res: Response) => {
 
 // POST /api/estimate/components — scoped cost estimates for selected components
 router.post('/estimate/components', async (req: Request, res: Response) => {
-  const { projectId, componentIds } = req.body;
+  const { projectId, componentIds, totalTokens: clientTotalTokens } = req.body;
 
   if (!projectId) {
     res.status(400).json({ error: 'projectId is required' });
@@ -941,6 +950,10 @@ router.post('/estimate/components', async (req: Request, res: Response) => {
   }
   if (!Array.isArray(componentIds)) {
     res.status(400).json({ error: 'componentIds must be an array' });
+    return;
+  }
+  if (typeof clientTotalTokens !== 'number' || clientTotalTokens < 0) {
+    res.status(400).json({ error: 'totalTokens is required and must be a non-negative number' });
     return;
   }
 
@@ -966,7 +979,7 @@ router.post('/estimate/components', async (req: Request, res: Response) => {
       }
     }
 
-    const estimate = await estimateCostsForComponents(pool, componentIds);
+    const estimate = await estimateCostsForComponents(pool, componentIds, clientTotalTokens);
 
     res.json({
       totalFiles: estimate.totalFiles,
@@ -1189,21 +1202,22 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
     const audit = rows[0];
 
     // Determine access level: requester or owner get full details, others get basic status
-    let isPrivileged = false;
+    let isOwner = false;
+    let isRequester = false;
     const session = await getSessionInfo(pool, req.cookies?.session);
     if (session) {
       if (session.userId === audit.requester_id) {
-        isPrivileged = true;
-      } else {
-        try {
-          const ownership = await resolveOwnership(
-            pool, session.userId, audit.github_org,
-            session.githubUsername, session.githubToken, session.hasOrgScope,
-          );
-          if (ownership.isOwner) isPrivileged = true;
-        } catch { /* not owner */ }
+        isRequester = true;
       }
+      try {
+        const ownership = await resolveOwnership(
+          pool, session.userId, audit.github_org,
+          session.githubUsername, session.githubToken, session.hasOrgScope,
+        );
+        if (ownership.isOwner) isOwner = true;
+      } catch { /* not owner */ }
     }
+    const isPrivileged = isOwner || isRequester;
 
     // Get commits
     const { rows: commits } = await pool.query(
@@ -1218,9 +1232,12 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
       id: audit.id,
       projectId: audit.project_id,
       projectName: audit.project_name,
+      githubOrg: audit.github_org,
       status: audit.status,
       auditLevel: audit.audit_level,
       isIncremental: audit.is_incremental,
+      isOwner,
+      isRequester,
       totalFiles: audit.total_files,
       filesToAnalyze: audit.files_to_analyze,
       filesAnalyzed: audit.files_analyzed,

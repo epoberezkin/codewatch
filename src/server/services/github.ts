@@ -155,7 +155,9 @@ async function listUserRepos(username: string, token?: string): Promise<GitHubRe
 
 // ---------- Org Membership Role ----------
 
-export async function getOrgMembershipRole(org: string, token: string): Promise<OrgMembership | null> {
+export async function getOrgMembershipRole(
+  org: string, token: string,
+): Promise<{ membership: OrgMembership | null; httpStatus: number }> {
   const res = await fetch(
     `https://api.github.com/user/memberships/orgs/${encodeURIComponent(org)}`,
     {
@@ -166,13 +168,70 @@ export async function getOrgMembershipRole(org: string, token: string): Promise<
     }
   );
 
-  if (!res.ok) return null; // 404 = not a member, 403 = no scope
+  if (!res.ok) return { membership: null, httpStatus: res.status };
 
   const body = await res.json() as { role: string; state: string };
   return {
-    role: body.role as 'admin' | 'member',
-    state: body.state as 'active' | 'pending',
+    membership: {
+      role: body.role as 'admin' | 'member',
+      state: body.state as 'active' | 'pending',
+    },
+    httpStatus: res.status,
   };
+}
+
+// ---------- Repo Permission Fallback ----------
+
+/**
+ * Fallback ownership check via repo permissions.
+ * When the org membership API returns 403 (e.g. org has third-party app
+ * restrictions), we check if the user has admin permission on the org's
+ * repos instead. Public repo endpoints work even with org restrictions.
+ */
+async function checkOrgRoleViaRepoPermissions(
+  org: string, token: string,
+): Promise<'admin' | 'write' | 'read' | null> {
+  try {
+    const res = await fetch(
+      `https://api.github.com/orgs/${encodeURIComponent(org)}/repos?per_page=1&type=public&sort=pushed`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const repos = await res.json() as Array<{ name: string; permissions?: { admin?: boolean; push?: boolean } }>;
+    if (repos.length === 0) return null;
+
+    // The list endpoint may include permissions for the authenticated user
+    const perms = repos[0].permissions;
+    if (perms) {
+      if (perms.admin) return 'admin';
+      if (perms.push) return 'write';
+      return 'read';
+    }
+
+    // If not included in list, fetch the specific repo
+    const repoRes = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(org)}/${encodeURIComponent(repos[0].name)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+        },
+      }
+    );
+    if (!repoRes.ok) return null;
+    const repo = await repoRes.json() as { permissions?: { admin?: boolean; push?: boolean } };
+    if (!repo.permissions) return null;
+    if (repo.permissions.admin) return 'admin';
+    if (repo.permissions.push) return 'write';
+    return 'read';
+  } catch {
+    return null;
+  }
 }
 
 // ---------- Ownership Verification ----------
@@ -188,19 +247,28 @@ export async function checkGitHubOwnership(
     return { isOwner: true, role: 'personal' };
   }
 
-  // Org account without read:org scope — can't verify
-  if (!hasOrgScope) {
-    return { isOwner: false, needsReauth: true };
+  // Primary: try the membership API (works when app is approved for org)
+  const { membership, httpStatus } = await getOrgMembershipRole(githubOrg, githubToken);
+  if (membership) {
+    const isOwner = membership.role === 'admin' && membership.state === 'active';
+    return { isOwner, role: membership.role };
   }
 
-  // Org account with scope — check membership role
-  const membership = await getOrgMembershipRole(githubOrg, githubToken);
-  if (!membership) {
+  // Fallback on 403: org likely has third-party app restrictions.
+  // Check repo permissions instead — public repo endpoints still work.
+  if (httpStatus === 403) {
+    const repoRole = await checkOrgRoleViaRepoPermissions(githubOrg, githubToken);
+    if (repoRole === 'admin') {
+      return { isOwner: true, role: 'admin' };
+    }
+    // write/read on public repos is not a reliable signal —
+    // any authenticated user gets pull access to public repos.
+    // Can't verify ownership.
     return { isOwner: false };
   }
 
-  const isOwner = membership.role === 'admin' && membership.state === 'active';
-  return { isOwner, role: membership.role };
+  // 404 = not a member, other errors → not owner
+  return { isOwner: false };
 }
 
 // ---------- Entity Info ----------
@@ -252,28 +320,60 @@ export async function listRepoBranches(
   repo: string,
   token?: string,
 ): Promise<GitHubBranch[]> {
-  const branches: GitHubBranch[] = [];
-  let page = 1;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const query = `
+    query($owner: String!, $repo: String!, $cursor: String) {
+      repository(owner: $owner, name: $repo) {
+        refs(refPrefix: "refs/heads/", first: 100, after: $cursor) {
+          nodes {
+            name
+            target { ... on Commit { committedDate } }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }
+  `;
+
+  const all: Array<{ name: string; date: string }> = [];
+  let cursor: string | null = null;
 
   while (true) {
-    const headers: Record<string, string> = {
-      Accept: 'application/vnd.github+json',
+    const res = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, variables: { owner, repo, cursor } }),
+    });
+    if (!res.ok) throw new Error(`GitHub GraphQL error: ${res.status}`);
+
+    const body = await res.json() as {
+      data?: { repository?: { refs?: {
+        nodes: Array<{ name: string; target?: { committedDate?: string } }>;
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      } } };
+      errors?: Array<{ message: string }>;
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (body.errors?.length) {
+      throw new Error(`GitHub GraphQL error: ${body.errors[0].message}`);
+    }
 
-    const res = await fetch(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100&page=${page}`,
-      { headers }
-    );
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+    const refs = body.data?.repository?.refs;
+    if (!refs) break;
 
-    const batch = await res.json() as Array<{ name: string }>;
-    branches.push(...batch.map(b => ({ name: b.name })));
-    if (batch.length < 100) break;
-    page++;
+    for (const n of refs.nodes) {
+      all.push({ name: n.name, date: n.target?.committedDate || '' });
+    }
+
+    if (!refs.pageInfo.hasNextPage) break;
+    cursor = refs.pageInfo.endCursor;
   }
 
-  return branches;
+  all.sort((a, b) => b.date.localeCompare(a.date));
+  return all.map(b => ({ name: b.name }));
 }
 
 // ---------- Commit Date (for shallow-since) ----------

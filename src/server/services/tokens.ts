@@ -60,28 +60,8 @@ export async function estimateCosts(
   const totalFiles = files.length;
   const totalTokens = roughTokenCount(files);
 
-  // Sort files by security criticality for thorough mode
-  const scoredFiles = files.map(f => ({
-    ...f,
-    securityScore: SECURITY_CRITICAL_PATTERNS.reduce(
-      (score, pattern) => score + (pattern.test(f.relativePath) ? 1 : 0),
-      0
-    ),
-  }));
-  scoredFiles.sort((a, b) => b.securityScore - a.securityScore);
-
-  // Full: all files
-  const fullTokens = totalTokens;
-
-  // Thorough: ~33% prioritizing security-critical paths
-  const thoroughFileCount = Math.ceil(totalFiles * 0.33);
-  const thoroughFiles = scoredFiles.slice(0, thoroughFileCount);
-  const thoroughTokens = roughTokenCount(thoroughFiles);
-
-  // Opportunistic: ~10%
-  const opportunisticFileCount = Math.ceil(totalFiles * 0.10);
-  const opportunisticFiles = scoredFiles.slice(0, opportunisticFileCount);
-  const opportunisticTokens = roughTokenCount(opportunisticFiles);
+  const thoroughTokens = Math.round(totalTokens * 0.33);
+  const opportunisticTokens = Math.round(totalTokens * 0.10);
 
   return {
     totalFiles,
@@ -89,18 +69,18 @@ export async function estimateCosts(
     estimates: {
       full: {
         files: totalFiles,
-        tokens: fullTokens,
-        costUsd: calculateLevelCost(fullTokens, 'full', pricing),
+        tokens: totalTokens,
+        costUsd: calculateLevelCost(totalTokens, totalTokens, pricing),
       },
       thorough: {
-        files: thoroughFileCount,
+        files: Math.ceil(totalFiles * 0.33),
         tokens: thoroughTokens,
-        costUsd: calculateLevelCost(thoroughTokens, 'thorough', pricing),
+        costUsd: calculateLevelCost(thoroughTokens, totalTokens, pricing),
       },
       opportunistic: {
-        files: opportunisticFileCount,
+        files: Math.ceil(totalFiles * 0.10),
         tokens: opportunisticTokens,
-        costUsd: calculateLevelCost(opportunisticTokens, 'opportunistic', pricing),
+        costUsd: calculateLevelCost(opportunisticTokens, totalTokens, pricing),
       },
     },
     isPrecise: false,
@@ -128,25 +108,25 @@ export async function estimateCostsFromTokenCount(
       full: {
         files: totalFiles,
         tokens: totalTokens,
-        costUsd: calculateLevelCost(totalTokens, 'full', pricing),
+        costUsd: calculateLevelCost(totalTokens, totalTokens, pricing),
       },
       thorough: {
         files: Math.ceil(totalFiles * 0.33),
         tokens: thoroughTokens,
-        costUsd: calculateLevelCost(thoroughTokens, 'thorough', pricing),
+        costUsd: calculateLevelCost(thoroughTokens, totalTokens, pricing),
       },
       opportunistic: {
         files: Math.ceil(totalFiles * 0.10),
         tokens: opportunisticTokens,
-        costUsd: calculateLevelCost(opportunisticTokens, 'opportunistic', pricing),
+        costUsd: calculateLevelCost(opportunisticTokens, totalTokens, pricing),
       },
     },
     isPrecise: true,
   };
 }
 
-// Overhead multiplier: adds ~5% for planning calls, system prompts, etc.
-const OVERHEAD_MULTIPLIER = 1.05;
+// Component analysis overhead: 5% of total project tokens (fixed cost, independent of audit level).
+const ANALYSIS_OVERHEAD = 0.05;
 
 // Estimated ratio of output tokens to input tokens per analysis batch.
 // Security audits produce structured JSON findings (~15% of input size).
@@ -154,10 +134,10 @@ const ESTIMATED_OUTPUT_RATIO = 0.15;
 
 function calculateLevelCost(
   levelTokens: number,
-  _level: string,
+  totalTokens: number,
   pricing: ModelPricing,
 ): number {
-  const inputTokens = levelTokens * OVERHEAD_MULTIPLIER;
+  const inputTokens = levelTokens + totalTokens * ANALYSIS_OVERHEAD;
   const outputTokens = inputTokens * ESTIMATED_OUTPUT_RATIO;
   const cost = (inputTokens / 1_000_000) * pricing.inputCostPerMtok
              + (outputTokens / 1_000_000) * pricing.outputCostPerMtok;
@@ -171,6 +151,7 @@ function calculateLevelCost(
 export async function estimateCostsForComponents(
   pool: Pool,
   componentIds: string[],
+  projectTotalTokens: number,
   modelId: string = 'claude-opus-4-5-20251101',
 ): Promise<CostEstimate> {
   if (componentIds.length === 0) {
@@ -208,17 +189,17 @@ export async function estimateCostsForComponents(
       full: {
         files: totalFiles,
         tokens: totalTokens,
-        costUsd: calculateLevelCost(totalTokens, 'full', pricing),
+        costUsd: calculateLevelCost(totalTokens, projectTotalTokens, pricing),
       },
       thorough: {
         files: Math.ceil(totalFiles * 0.33),
         tokens: thoroughTokens,
-        costUsd: calculateLevelCost(thoroughTokens, 'thorough', pricing),
+        costUsd: calculateLevelCost(thoroughTokens, projectTotalTokens, pricing),
       },
       opportunistic: {
         files: Math.ceil(totalFiles * 0.10),
         tokens: opportunisticTokens,
-        costUsd: calculateLevelCost(opportunisticTokens, 'opportunistic', pricing),
+        costUsd: calculateLevelCost(opportunisticTokens, projectTotalTokens, pricing),
       },
     },
     isPrecise: false,

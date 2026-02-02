@@ -163,6 +163,25 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
+// ---------- Ownership & Access Tier Badges ----------
+
+function renderOwnershipBadge(ownership: { isOwner: boolean; role?: string | null; needsReauth?: boolean } | null | undefined): string {
+  if (!ownership) return '';
+  if (ownership.isOwner) {
+    return '<span class="badge badge-completed">owner</span>';
+  }
+  if (ownership.needsReauth) {
+    return '<a href="/auth/github" class="badge badge-pending" title="Click to re-authenticate and verify ownership">verify ownership</a>';
+  }
+  return '';
+}
+
+function renderAccessTierBadge(tier: 'owner' | 'requester' | 'public'): string {
+  if (tier === 'owner') return '<span class="badge badge-completed">full access</span>';
+  if (tier === 'requester') return '<span class="badge badge-pending">redacted</span>';
+  return '<span class="badge badge-type">summary only</span>';
+}
+
 // ---------- Error Helpers ----------
 
 function showInlineError(container: HTMLElement, message: string): void {
@@ -194,36 +213,6 @@ function formatStatus(status: string): string {
     'open': 'Open',
   };
   return map[status] || status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// ---------- Shared: curateBranches ----------
-
-// Well-known branch names to prioritize in dropdowns
-const WELL_KNOWN_BRANCHES = ['main', 'master', 'stable', 'dev', 'development'];
-
-function curateBranches(allBranches: string[], defaultBranch: string): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  // 1. Default branch first
-  if (allBranches.includes(defaultBranch)) {
-    result.push(defaultBranch);
-    seen.add(defaultBranch);
-  }
-
-  // 2. Well-known branches
-  for (const name of WELL_KNOWN_BRANCHES) {
-    if (!seen.has(name) && allBranches.includes(name)) {
-      result.push(name);
-      seen.add(name);
-    }
-  }
-
-  // 3. Remaining branches alphabetically
-  const remaining = allBranches.filter(b => !seen.has(b)).sort();
-  result.push(...remaining);
-
-  return result;
 }
 
 // ---------- Shared: attachAddAsProjectHandlers ----------

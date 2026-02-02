@@ -146,28 +146,23 @@ describe('Estimation API', () => {
       const data = await res.json();
 
       // Formula: cost = (inputTokens/1M * inputCost) + (outputTokens/1M * outputCost)
-      // where inputTokens = levelTokens * 1.05 (overhead), outputTokens = inputTokens * 0.15
+      // where inputTokens = levelTokens + totalTokens * 0.05 (analysis overhead)
+      // outputTokens = inputTokens * 0.15
       // inputCostPerMtok = 5, outputCostPerMtok = 25
       //
-      // estimateCosts() sorts files by security-critical pattern score then selects top N:
-      // Score 2: src/routes/api.ts (3000 tokens) — matches /\bapi\b/i + /\broute/i
-      // Score 1: src/auth.ts (2000 tokens) — matches /\bauth\b/i
-      // Score 1: config.json (100 tokens) — matches /\bconfig\b/i
-      // Score 0: src/index.ts (1000), src/utils.ts (500), package.json (200)
-      //
-      // Full: all 6800 tokens
-      // Thorough: top ceil(6*0.33)=2 files → api.ts + auth.ts = 5000 tokens
-      // Opportunistic: top ceil(6*0.10)=1 file → api.ts = 3000 tokens
+      // Flat percentages: full=100%, thorough=33%, opportunistic=10% of total tokens
+      // Total tokens = 6800 (sum of all test files)
+      const totalTokens = 6800;
       function expectedCost(levelTokens: number) {
-        const inputTokens = levelTokens * 1.05;
+        const inputTokens = levelTokens + totalTokens * 0.05;
         const outputTokens = inputTokens * 0.15;
         const cost = (inputTokens / 1_000_000) * 5 + (outputTokens / 1_000_000) * 25;
         return Math.round(cost * 10000) / 10000;
       }
 
       expect(data.estimates.full.costUsd).toBeCloseTo(expectedCost(6800), 4);
-      expect(data.estimates.thorough.costUsd).toBeCloseTo(expectedCost(5000), 4);
-      expect(data.estimates.opportunistic.costUsd).toBeCloseTo(expectedCost(3000), 4);
+      expect(data.estimates.thorough.costUsd).toBeCloseTo(expectedCost(Math.round(6800 * 0.33)), 4);
+      expect(data.estimates.opportunistic.costUsd).toBeCloseTo(expectedCost(Math.round(6800 * 0.10)), 4);
 
       // Verify correct ordering: full > thorough > opportunistic
       expect(data.estimates.full.costUsd).toBeGreaterThan(data.estimates.thorough.costUsd);

@@ -36,7 +36,7 @@
                 <span>Loading project...</span>
             </div>
             <div class="hidden" id="header-content">
-                <h1 id="project-name"></h1>
+                <h1 id="project-name"><span id="ownership-badge"></span></h1>
                 <p class="text-muted" id="project-description"></p>
                 <div class="audit-meta mt-1" id="project-meta"></div>
             </div>
@@ -119,7 +119,7 @@
             <h3 class="mb-2">Component Analysis</h3>
             <p class="text-muted mb-1">Analyze project structure and security profiles to refine audit scope.</p>
             <div id="component-not-analyzed">
-                <p class="text-sm text-muted mb-1">Uses Sonnet 4.5 (~$0.05&ndash;0.20 for analysis).</p>
+                <p class="text-sm text-muted mb-1">Uses Opus 4.5 (<span id="analysis-cost-hint">estimating...</span>).</p>
                 <button class="btn btn-primary" id="analyze-components-btn" disabled>Analyze Components</button>
             </div>
             <div class="hidden" id="component-analyzing">
@@ -130,9 +130,9 @@
             </div>
         </div>
 
-        <!-- Re-analyze button (shown after component analysis) -->
+        <!-- Re-analyze link (shown after component analysis) -->
         <div class="hidden" id="reanalyze-section">
-            <button class="btn btn-sm btn-secondary mb-1" id="reanalyze-btn">Re-analyze Components</button>
+            <p class="text-sm text-muted mb-1"><a href="#" id="reanalyze-btn">Re-run component analysis</a></p>
         </div>
 
         <!-- Component Selection (hidden until analysis complete) -->
@@ -159,6 +159,8 @@
 
         <!-- Start Audit (hidden until mode selected) -->
         <div class="hidden" id="step-3">
+            <!-- Access tier preview -->
+            <div class="notice notice-info hidden" id="access-tier-preview"></div>
             <!-- Non-owner notice -->
             <div class="notice notice-warn hidden" id="non-owner-notice">
                 <strong>Non-owner notice:</strong> Findings rated Medium or above will be shown as severity counts only. Full details for serious findings are available after a time-gate (3 months for medium/high, 6 months for critical) or when the project owner publishes the report. By running this audit, you are sponsoring the project's security.

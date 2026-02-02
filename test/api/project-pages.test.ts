@@ -512,4 +512,114 @@ describe('Project Pages', () => {
       expect(privateAudit).toBeDefined();
     });
   });
+
+  // ============================================================
+  // Browse ownership — deduplication + role + non-creator
+  // ============================================================
+
+  describe('GET /api/projects/browse — ownership', () => {
+    it('returns ownership for non-creator when user is org admin', async () => {
+      // User1 creates the project
+      const creator = await createTestSession(ctx.pool);
+      const projId = await createProject(creator);
+      await insertAudit(projId, creator.userId, { isPublic: true });
+
+      // User2 (different user) browses — they're an org admin for the same org
+      const admin = await createTestSession(ctx.pool);
+      mockGitHubState.ownershipResult = { isOwner: true, role: 'admin' };
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/projects/browse`, admin.cookie
+      );
+      expect(res.status).toBe(200);
+      const { projects } = await res.json();
+      expect(projects).toHaveLength(1);
+      expect(projects[0].ownership).toBeDefined();
+      expect(projects[0].ownership.isOwner).toBe(true);
+    });
+
+    it('ownership includes role field for badge differentiation', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+      await insertAudit(projId, session.userId, { isPublic: true });
+
+      // Clear cache populated by createProject (which used default mock without role)
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [session.userId]);
+      mockGitHubState.ownershipResult = { isOwner: true, role: 'admin' };
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/projects/browse?mine=true`, session.cookie
+      );
+      expect(res.status).toBe(200);
+      const { projects } = await res.json();
+      expect(projects[0].ownership.role).toBe('admin');
+    });
+
+    it('returns needsReauth in ownership when applicable', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+      await insertAudit(projId, session.userId, { isPublic: true });
+
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [session.userId]);
+      mockGitHubState.ownershipResult = { isOwner: false, needsReauth: true };
+
+      const res = await authenticatedFetch(
+        `${ctx.baseUrl}/api/projects/browse?mine=true`, session.cookie
+      );
+      expect(res.status).toBe(200);
+      const { projects } = await res.json();
+      expect(projects[0].ownership).toBeDefined();
+      expect(projects[0].ownership.isOwner).toBe(false);
+      expect(projects[0].ownership.needsReauth).toBe(true);
+    });
+
+    it('anonymous browse does not include ownership', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+      await insertAudit(projId, session.userId, { isPublic: true });
+
+      const res = await fetch(`${ctx.baseUrl}/api/projects/browse`);
+      expect(res.status).toBe(200);
+      const { projects } = await res.json();
+      expect(projects).toHaveLength(1);
+      expect(projects[0].ownership).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // Project detail — ownership with role and needsReauth
+  // ============================================================
+
+  describe('GET /api/projects/:id — ownership details', () => {
+    it('returns ownership with role for authenticated user', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+
+      // Clear cache populated by createProject (which used default mock without role)
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [session.userId]);
+      mockGitHubState.ownershipResult = { isOwner: true, role: 'admin' };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/${projId}`, session.cookie);
+      expect(res.status).toBe(200);
+
+      const project = await res.json();
+      expect(project.ownership.isOwner).toBe(true);
+      expect(project.ownership.role).toBeTruthy();
+    });
+
+    it('shows needsReauth when GitHub returns 403', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+
+      await ctx.pool.query('DELETE FROM ownership_cache WHERE user_id = $1', [session.userId]);
+      mockGitHubState.ownershipResult = { isOwner: false, needsReauth: true };
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/${projId}`, session.cookie);
+      expect(res.status).toBe(200);
+
+      const project = await res.json();
+      expect(project.ownership.isOwner).toBe(false);
+      expect(project.ownership.needsReauth).toBe(true);
+    });
+  });
 });

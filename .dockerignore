@@ -1,0 +1,40 @@
+# Claude files
+CLAUDE.md
+.claude
+
+# Build artifacts
+dist/
+public/js/
+*.tsbuildinfo
+coverage/
+
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+
+# Cloned repos (runtime data)
+repos/
+
+# Database
+db/
+
+# OS
+.DS_Store
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

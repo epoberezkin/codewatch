@@ -94,6 +94,7 @@ nav {
     width: 100%;
     margin: 0 auto;
     padding: 0.75rem 1.5rem;
+    position: relative;
 }
 
 .logo {
@@ -632,7 +633,7 @@ tr:hover td {
 /* ---------- Estimate: Cost Cards ---------- */
 .estimate-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
     gap: 1rem;
     margin: 1.5rem 0;
 }
@@ -991,7 +992,53 @@ tr:hover td {
     main {
         padding: 1.5rem 1rem;
     }
+    .hamburger {
+        display: block;
+    }
+
     .nav-links {
         display: none;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--surface);
+        padding: 1rem;
+        border-bottom: 1px solid var(--border);
+        z-index: 100;
     }
+
+    .nav-links.open {
+        display: flex;
+    }
+}
+
+/* Hamburger menu */
+.hamburger {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text);
+    padding: 0.25rem 0.5rem;
+}
+
+.filter-active {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
 }

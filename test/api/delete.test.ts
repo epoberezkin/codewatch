@@ -288,5 +288,43 @@ describe('Delete API', () => {
       );
       expect(res.status).toBe(404);
     });
+
+    it('cascades to audit_plan and component_analyses on delete', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projectId = await createProject(session);
+      const auditId = await insertAudit(projectId, session.userId);
+
+      // Set audit_plan on the audit
+      await ctx.pool.query(
+        `UPDATE audits SET audit_plan = $1 WHERE id = $2`,
+        [JSON.stringify([{ file: 'src/index.ts', tokens: 300, priority: 9, reason: 'test' }]), auditId]
+      );
+
+      // Create a component_analysis for this project
+      const { rows: [ca] } = await ctx.pool.query(
+        `INSERT INTO component_analyses (project_id, status) VALUES ($1, 'completed') RETURNING id`,
+        [projectId]
+      );
+
+      // Link project to the component_analysis
+      await ctx.pool.query(
+        `UPDATE projects SET component_analysis_id = $1 WHERE id = $2`,
+        [ca.id, projectId]
+      );
+
+      // Delete project
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/${projectId}`, session.cookie, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(204);
+
+      // Verify audit is gone (and its audit_plan with it)
+      const { rows: auditRows } = await ctx.pool.query('SELECT id FROM audits WHERE id = $1', [auditId]);
+      expect(auditRows).toHaveLength(0);
+
+      // Verify component_analyses row is gone
+      const { rows: caRows } = await ctx.pool.query('SELECT id FROM component_analyses WHERE id = $1', [ca.id]);
+      expect(caRows).toHaveLength(0);
+    });
   });
 });

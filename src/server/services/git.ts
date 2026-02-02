@@ -18,7 +18,7 @@ const CODE_EXTENSIONS = new Set([
 ]);
 
 // Directories to skip
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS = new Set([
   'node_modules', '.git', 'vendor', 'dist', 'build', '.next', '__pycache__',
   '.tox', '.venv', 'venv', 'target', '.gradle', 'Pods',
 ]);
@@ -42,6 +42,7 @@ export interface DiffResult {
   modified: string[];
   deleted: string[];
   renamed: Array<{ from: string; to: string }>;
+  isFallback: boolean;
 }
 
 // ---------- Clone / Update ----------
@@ -82,7 +83,7 @@ export async function cloneOrUpdate(
     if (!log.latest) throw new Error(`Repository at ${repoUrl} has no commits`);
     return { localPath, headSha: log.latest.hash };
   } else {
-    // Clone fresh
+    // Clone fresh — use recursive mkdir (atomic, won't error if dir exists)
     fs.mkdirSync(localPath, { recursive: true });
     const git = simpleGit();
     const cloneArgs = ['--single-branch'];
@@ -90,13 +91,22 @@ export async function cloneOrUpdate(
       cloneArgs.push('-b', branch);
     }
     if (shallowSince) {
-      // Incremental clone of a repo we don't have on disk yet
       const sinceStr = shallowSince.toISOString().split('T')[0];
       cloneArgs.push(`--shallow-since=${sinceStr}`);
     } else {
       cloneArgs.push('--depth', '1');
     }
-    await git.clone(repoUrl, localPath, cloneArgs);
+    try {
+      await git.clone(repoUrl, localPath, cloneArgs);
+    } catch (cloneErr) {
+      // Another process may have cloned concurrently — check if repo now exists
+      try {
+        fs.accessSync(path.join(localPath, '.git'), fs.constants.F_OK);
+        // Repo exists now, fall through to read HEAD
+      } catch {
+        throw cloneErr; // Genuine clone failure
+      }
+    }
     const localGit = simpleGit(localPath);
     const log = await localGit.log({ maxCount: 1 });
     if (!log.latest) throw new Error(`Repository at ${repoUrl} has no commits after clone`);
@@ -175,6 +185,7 @@ export async function diffBetweenCommits(
     modified: [],
     deleted: [],
     renamed: [],
+    isFallback: false,
   };
 
   // Use raw diff to get status flags
@@ -201,14 +212,24 @@ export async function diffBetweenCommits(
 
 // ---------- Read File Content ----------
 
-export function readFileContent(repoPath: string, relativePath: string): string | null {
+export interface ReadFileResult {
+  content: string | null;
+  error?: string;
+}
+
+export function readFileContent(repoPath: string, relativePath: string): ReadFileResult {
   try {
     const fullPath = path.resolve(path.join(repoPath, relativePath));
     // Prevent path traversal outside the repository root
-    if (!fullPath.startsWith(path.resolve(repoPath))) return null;
-    return fs.readFileSync(fullPath, 'utf-8');
-  } catch {
-    return null;
+    if (!fullPath.startsWith(path.resolve(repoPath) + path.sep) && fullPath !== path.resolve(repoPath)) {
+      return { content: null, error: 'path_traversal' };
+    }
+    return { content: fs.readFileSync(fullPath, 'utf-8') };
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return { content: null, error: 'not_found' };
+    if (code === 'EACCES') return { content: null, error: 'permission_denied' };
+    return { content: null, error: `io_error: ${code || 'unknown'}` };
   }
 }
 

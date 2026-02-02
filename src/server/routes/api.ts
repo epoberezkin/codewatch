@@ -19,6 +19,54 @@ function escapeILike(input: string): string {
   return input.replace(/[%_\\]/g, ch => '\\' + ch);
 }
 
+// Helper: resolve session info from session cookie
+interface SessionInfo {
+  userId: string;
+  githubToken: string;
+  githubUsername: string;
+  githubType: string;
+  hasOrgScope: boolean;
+}
+
+async function getSessionInfo(pool: any, sessionId: string | undefined): Promise<SessionInfo | null> {
+  if (!sessionId) return null;
+  const { rows } = await pool.query(
+    `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username, u.github_type
+     FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id = $1 AND s.expires_at > NOW()`,
+    [sessionId]
+  );
+  if (rows.length === 0) return null;
+  return {
+    userId: rows[0].user_id,
+    githubToken: rows[0].github_token,
+    githubUsername: rows[0].github_username,
+    githubType: rows[0].github_type,
+    hasOrgScope: rows[0].has_org_scope,
+  };
+}
+
+// Helper: resolve access tier for three-tier access control on audit reports/findings
+type AccessTier = 'owner' | 'requester' | 'public';
+
+function resolveAccessTier(audit: any, requesterId: string | null, isOwner: boolean): AccessTier {
+  const now = new Date();
+  const publishableAfter = audit.publishable_after ? new Date(audit.publishable_after) : null;
+  const isAutoPublished = publishableAfter && audit.owner_notified && now >= publishableAfter;
+  const fullAccessForAll = audit.is_public || isAutoPublished;
+  const isRequester = requesterId && requesterId === audit.requester_id;
+
+  if (fullAccessForAll || isOwner) return 'owner';
+  if (isRequester) return 'requester';
+  return 'public';
+}
+
+function getRedactedSeverities(tier: AccessTier): Set<string> {
+  if (tier === 'owner') return new Set();
+  if (tier === 'requester') return new Set();
+  return new Set(['critical', 'high']);
+}
+
 // ============================================================
 // GitHub Org Repos
 // ============================================================
@@ -28,16 +76,9 @@ router.get('/github/orgs/:org/repos', async (req: Request, res: Response) => {
   const org = req.params.org as string;
   try {
     // Use session token if available for higher rate limits
-    const sessionId = req.cookies?.session;
-    let token: string | undefined;
-    if (sessionId) {
-      const pool = getPool();
-      const { rows } = await pool.query(
-        'SELECT s.github_token FROM sessions s WHERE s.id = $1 AND s.expires_at > NOW()',
-        [sessionId]
-      );
-      if (rows.length > 0) token = rows[0].github_token;
-    }
+    const pool = getPool();
+    const session = await getSessionInfo(pool, req.cookies?.session);
+    const token = session?.githubToken;
 
     const repos = await listOrgRepos(org, token);
     res.json(repos.map(r => ({
@@ -47,6 +88,7 @@ router.get('/github/orgs/:org/repos', async (req: Request, res: Response) => {
       stars: r.stargazers_count,
       forks: r.forks_count,
       defaultBranch: r.default_branch,
+      // License from GitHub API: nested object with spdx_id, may be null if repo has no license
       license: r.license?.spdx_id || null,
       url: r.html_url,
       githubId: r.id,
@@ -62,38 +104,20 @@ router.get('/github/entity/:name', async (req: Request, res: Response) => {
   const name = req.params.name as string;
   try {
     // Use session token if available
-    const sessionId = req.cookies?.session;
-    let token: string | undefined;
-    let userId: string | null = null;
-    let githubUsername: string | null = null;
-    let hasOrgScope = false;
-
     const pool = getPool();
-    if (sessionId) {
-      const { rows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
-      );
-      if (rows.length > 0) {
-        token = rows[0].github_token;
-        userId = rows[0].user_id;
-        githubUsername = rows[0].github_username;
-        hasOrgScope = rows[0].has_org_scope;
-      }
-    }
+    const session = await getSessionInfo(pool, req.cookies?.session);
+    const token = session?.githubToken;
 
     const entity = await getGitHubEntity(name, token);
 
     let isOwner: boolean | null = null;
     let role: string | null = null;
     let needsReauth = false;
-    if (userId && githubUsername) {
+    if (session) {
       try {
         const ownership = await resolveOwnership(
-          pool, userId, name,
-          githubUsername, token!, hasOrgScope,
+          pool, session.userId, name,
+          session.githubUsername, session.githubToken, session.hasOrgScope,
         );
         isOwner = ownership.isOwner;
         role = ownership.role || null;
@@ -114,16 +138,9 @@ router.get('/github/repos/:owner/:repo/branches', async (req: Request, res: Resp
   const repo = req.params.repo as string;
   try {
     // Use session token if available
-    const sessionId = req.cookies?.session;
-    let token: string | undefined;
-    if (sessionId) {
-      const pool = getPool();
-      const { rows } = await pool.query(
-        'SELECT s.github_token FROM sessions s WHERE s.id = $1 AND s.expires_at > NOW()',
-        [sessionId]
-      );
-      if (rows.length > 0) token = rows[0].github_token;
-    }
+    const pool = getPool();
+    const session = await getSessionInfo(pool, req.cookies?.session);
+    const token = session?.githubToken;
 
     const [branches, defaultBranch] = await Promise.all([
       listRepoBranches(owner, repo, token),
@@ -198,7 +215,7 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
       [githubOrg, userId, sortedNames]
     );
     if (existingProjects.length > 0) {
-      res.json({ projectId: existingProjects[0].id, existing: true });
+      res.status(409).json({ projectId: existingProjects[0].id, existing: true, message: 'Project already exists' });
       return;
     }
 
@@ -264,26 +281,11 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
 
   try {
     // Resolve auth (optional — browse works without auth)
-    let userId: string | null = null;
-    let githubUsername: string | null = null;
-    let githubToken: string | null = null;
-    let hasOrgScope = false;
-
-    const sessionId = req.cookies?.session;
-    if (sessionId) {
-      const { rows: sessionRows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
-      );
-      if (sessionRows.length > 0) {
-        userId = sessionRows[0].user_id;
-        githubUsername = sessionRows[0].github_username;
-        githubToken = sessionRows[0].github_token;
-        hasOrgScope = sessionRows[0].has_org_scope;
-      }
-    }
+    const session = await getSessionInfo(pool, req.cookies?.session);
+    const userId = session?.userId ?? null;
+    const githubUsername = session?.githubUsername ?? null;
+    const githubToken = session?.githubToken ?? null;
+    const hasOrgScope = session?.hasOrgScope ?? false;
 
     if (mine === 'true' && !userId) {
       res.status(401).json({ error: 'Authentication required for My Projects' });
@@ -372,6 +374,7 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
         name: p.name,
         githubOrg: p.github_org,
         category: p.category,
+        // License from DB aggregate: string_agg of repo licenses, null when no repos have license data
         license: p.license || null,
         publicAuditCount: parseInt(p.public_audit_count),
         auditCount: parseInt(p.audit_count),
@@ -422,29 +425,21 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
     const project = projects[0];
 
     // Determine viewer identity + ownership
-    const sessionId = req.cookies?.session;
+    const session = await getSessionInfo(pool, req.cookies?.session);
     let viewerId: string | null = null;
     let isOwner = false;
     let ownership: { isOwner: boolean; role: string | null; needsReauth: boolean } | null = null;
 
-    if (sessionId) {
-      const { rows: sessionRows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
-      );
-      if (sessionRows.length > 0) {
-        viewerId = sessionRows[0].user_id;
-        try {
-          const result = await resolveOwnership(
-            pool, viewerId!, project.github_org,
-            sessionRows[0].github_username, sessionRows[0].github_token, sessionRows[0].has_org_scope,
-          );
-          isOwner = result.isOwner;
-          ownership = { isOwner: result.isOwner, role: result.role || null, needsReauth: result.needsReauth || false };
-        } catch { /* ignore */ }
-      }
+    if (session) {
+      viewerId = session.userId;
+      try {
+        const result = await resolveOwnership(
+          pool, session.userId, project.github_org,
+          session.githubUsername, session.githubToken, session.hasOrgScope,
+        );
+        isOwner = result.isOwner;
+        ownership = { isOwner: result.isOwner, role: result.role || null, needsReauth: result.needsReauth || false };
+      } catch { /* ignore */ }
     }
 
     // Get repos with license + branch
@@ -569,6 +564,7 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
         totalTokens: r.total_tokens,
         defaultBranch: r.default_branch,
         branch: r.branch || null,
+        // License from individual repo DB record: may be null if not yet fetched from GitHub
         license: r.license || null,
       })),
       components: components.map(c => ({
@@ -647,6 +643,12 @@ router.put('/projects/:id/branches', requireAuth as any, async (req: Request, re
           (typeof update.branch !== 'string' || update.branch.length === 0)) {
         res.status(400).json({ error: `Invalid branch for repo ${update.repoId}` });
         return;
+      }
+
+      // Warn if setting a branch that might not exist (non-blocking — branch existence
+      // is not validated server-side; clone will fail later if the branch is invalid)
+      if (update.branch) {
+        console.warn(`Setting branch '${update.branch}' for repo ${update.repoId} in project ${projectId} — branch existence not verified`);
       }
 
       await pool.query(
@@ -826,6 +828,7 @@ router.post('/estimate/precise', async (req: Request, res: Response) => {
     // Scan files from already-cloned repos
     const allFiles: ScannedFile[] = [];
     const repoBreakdown = [];
+    const cloneErrors: Array<{ repoName: string; error: string }> = [];
     const repoLocalPaths: Map<string, string> = new Map();
     const fs = await import('fs');
     const path = await import('path');
@@ -840,7 +843,9 @@ router.post('/estimate/precise', async (req: Request, res: Response) => {
           ...f,
           relativePath: `${repo.repo_name}/${f.relativePath}`,
         }));
-      } catch {
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Clone/scan failed';
+        cloneErrors.push({ repoName: repo.repo_name, error: errMsg });
         files = [];
       }
       allFiles.push(...files);
@@ -918,6 +923,7 @@ router.post('/estimate/precise', async (req: Request, res: Response) => {
       repoBreakdown,
       estimates: estimate.estimates,
       isPrecise: true,
+      cloneErrors: cloneErrors.length > 0 ? cloneErrors : undefined,
     });
   } catch (err) {
     console.error('Error computing precise estimate:', err);
@@ -985,32 +991,24 @@ router.get('/project/:id/audits', async (req: Request, res: Response) => {
 
   try {
     // Determine viewer identity + ownership for visibility filtering
-    const sessionId = req.cookies?.session;
+    const session = await getSessionInfo(pool, req.cookies?.session);
     let viewerId: string | null = null;
     let isOwner = false;
 
-    if (sessionId) {
-      const { rows: sessionRows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
+    if (session) {
+      viewerId = session.userId;
+      const { rows: projRows } = await pool.query(
+        'SELECT github_org FROM projects WHERE id = $1',
+        [projectId]
       );
-      if (sessionRows.length > 0) {
-        viewerId = sessionRows[0].user_id;
-        const { rows: projRows } = await pool.query(
-          'SELECT github_org FROM projects WHERE id = $1',
-          [projectId]
-        );
-        if (projRows.length > 0) {
-          try {
-            const ownership = await resolveOwnership(
-              pool, viewerId!, projRows[0].github_org,
-              sessionRows[0].github_username, sessionRows[0].github_token, sessionRows[0].has_org_scope,
-            );
-            isOwner = ownership.isOwner;
-          } catch { /* ignore ownership check failures */ }
-        }
+      if (projRows.length > 0) {
+        try {
+          const ownership = await resolveOwnership(
+            pool, session.userId, projRows[0].github_org,
+            session.githubUsername, session.githubToken, session.hasOrgScope,
+          );
+          isOwner = ownership.isOwner;
+        } catch { /* ignore ownership check failures */ }
       }
     }
 
@@ -1192,27 +1190,18 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
 
     // Determine access level: requester or owner get full details, others get basic status
     let isPrivileged = false;
-    const sessionId = req.cookies?.session;
-    if (sessionId) {
-      const { rows: sessionRows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
-      );
-      if (sessionRows.length > 0) {
-        const userId = sessionRows[0].user_id;
-        if (userId === audit.requester_id) {
-          isPrivileged = true;
-        } else {
-          try {
-            const ownership = await resolveOwnership(
-              pool, userId, audit.github_org,
-              sessionRows[0].github_username, sessionRows[0].github_token, sessionRows[0].has_org_scope,
-            );
-            if (ownership.isOwner) isPrivileged = true;
-          } catch { /* not owner */ }
-        }
+    const session = await getSessionInfo(pool, req.cookies?.session);
+    if (session) {
+      if (session.userId === audit.requester_id) {
+        isPrivileged = true;
+      } else {
+        try {
+          const ownership = await resolveOwnership(
+            pool, session.userId, audit.github_org,
+            session.githubUsername, session.githubToken, session.hasOrgScope,
+          );
+          if (ownership.isOwner) isPrivileged = true;
+        } catch { /* not owner */ }
       }
     }
 
@@ -1277,32 +1266,24 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
     const audit = rows[0];
 
     // Determine if requester is owner via GitHub ownership
-    const sessionId = req.cookies?.session;
+    const session = await getSessionInfo(pool, req.cookies?.session);
     let requesterId: string | null = null;
     let isOwner = false;
-    if (sessionId) {
-      const { rows: sessionRows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
+    if (session) {
+      requesterId = session.userId;
+      const { rows: projRows } = await pool.query(
+        'SELECT github_org FROM projects WHERE id = $1',
+        [audit.project_id]
       );
-      if (sessionRows.length > 0) {
-        requesterId = sessionRows[0].user_id;
-        const { rows: projRows } = await pool.query(
-          'SELECT github_org FROM projects WHERE id = $1',
-          [audit.project_id]
-        );
-        if (projRows.length > 0) {
-          try {
-            const ownership = await resolveOwnership(
-              pool, requesterId!, projRows[0].github_org,
-              sessionRows[0].github_username, sessionRows[0].github_token, sessionRows[0].has_org_scope,
-            );
-            isOwner = ownership.isOwner;
-          } catch {
-            // Ownership check failed (e.g. GitHub API down) — default to not owner
-          }
+      if (projRows.length > 0) {
+        try {
+          const ownership = await resolveOwnership(
+            pool, session.userId, projRows[0].github_org,
+            session.githubUsername, session.githubToken, session.hasOrgScope,
+          );
+          isOwner = ownership.isOwner;
+        } catch {
+          // Ownership check failed (e.g. GitHub API down) — default to not owner
         }
       }
     }
@@ -1341,23 +1322,7 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
 
     // Three-tier access control
     const isRequester = requesterId === audit.requester_id;
-    const now = new Date();
-    const publishableAfter = audit.publishable_after ? new Date(audit.publishable_after) : null;
-
-    // Check if report should have full access for everyone
-    // Auto-publish requires that the owner was actually notified (responsible disclosure)
-    const isAutoPublished = publishableAfter && audit.owner_notified && now >= publishableAfter;
-    const fullAccessForAll = audit.is_public || isAutoPublished;
-
-    // Determine access tier
-    let accessTier: 'owner' | 'requester' | 'public';
-    if (fullAccessForAll || isOwner) {
-      accessTier = 'owner'; // Full access
-    } else if (isRequester) {
-      accessTier = 'requester'; // Redacted findings list
-    } else {
-      accessTier = 'public'; // Summary only
-    }
+    const accessTier = resolveAccessTier(audit, requesterId, isOwner);
 
     let visibleFindings: any[];
     let redactedSeverities: string[] = [];
@@ -1523,52 +1488,31 @@ router.get('/audit/:id/findings', async (req: Request, res: Response) => {
     const audit = auditRows[0];
 
     // Determine viewer identity + ownership
-    const sessionId = req.cookies?.session;
+    const session = await getSessionInfo(pool, req.cookies?.session);
     let viewerId: string | null = null;
     let isOwner = false;
 
-    if (sessionId) {
-      const { rows: sessionRows } = await pool.query(
-        `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-         FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.expires_at > NOW()`,
-        [sessionId]
+    if (session) {
+      viewerId = session.userId;
+      const { rows: projRows } = await pool.query(
+        'SELECT github_org FROM projects WHERE id = $1',
+        [audit.project_id]
       );
-      if (sessionRows.length > 0) {
-        viewerId = sessionRows[0].user_id;
-        const { rows: projRows } = await pool.query(
-          'SELECT github_org FROM projects WHERE id = $1',
-          [audit.project_id]
-        );
-        if (projRows.length > 0) {
-          try {
-            const ownership = await resolveOwnership(
-              pool, viewerId!, projRows[0].github_org,
-              sessionRows[0].github_username, sessionRows[0].github_token, sessionRows[0].has_org_scope,
-            );
-            isOwner = ownership.isOwner;
-          } catch {
-            // Ownership check failed — default to not owner
-          }
+      if (projRows.length > 0) {
+        try {
+          const ownership = await resolveOwnership(
+            pool, session.userId, projRows[0].github_org,
+            session.githubUsername, session.githubToken, session.hasOrgScope,
+          );
+          isOwner = ownership.isOwner;
+        } catch {
+          // Ownership check failed — default to not owner
         }
       }
     }
 
     // Three-tier access control (same logic as report endpoint)
-    const isRequester = viewerId === audit.requester_id;
-    const now = new Date();
-    const publishableAfter = audit.publishable_after ? new Date(audit.publishable_after) : null;
-    const isAutoPublished = publishableAfter && audit.owner_notified && now >= publishableAfter;
-    const fullAccessForAll = audit.is_public || isAutoPublished;
-
-    let accessTier: 'owner' | 'requester' | 'public';
-    if (fullAccessForAll || isOwner) {
-      accessTier = 'owner';
-    } else if (isRequester) {
-      accessTier = 'requester';
-    } else {
-      accessTier = 'public';
-    }
+    const accessTier = resolveAccessTier(audit, viewerId, isOwner);
 
     // Public tier: no individual findings
     if (accessTier === 'public') {
@@ -1684,6 +1628,7 @@ router.patch('/findings/:id/status', requireAuth as any, async (req: Request, re
       [status, findingId]
     );
 
+    console.log(`Finding ${findingId} status changed to ${status} by user ${userId}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('Error updating finding status:', err);
@@ -1773,28 +1718,19 @@ router.get('/audit/:id/comments', async (req: Request, res: Response) => {
 
     // Check access: public audits are readable by anyone; private need owner/requester
     if (!audit.is_public) {
-      const sessionId = req.cookies?.session;
+      const session = await getSessionInfo(pool, req.cookies?.session);
       let hasAccess = false;
-      if (sessionId) {
-        const { rows: sessionRows } = await pool.query(
-          `SELECT s.user_id, s.github_token, s.has_org_scope, u.github_username
-           FROM sessions s JOIN users u ON u.id = s.user_id
-           WHERE s.id = $1 AND s.expires_at > NOW()`,
-          [sessionId]
-        );
-        if (sessionRows.length > 0) {
-          const userId = sessionRows[0].user_id;
-          if (userId === audit.requester_id) {
-            hasAccess = true;
-          } else {
-            try {
-              const ownership = await resolveOwnership(
-                pool, userId, audit.github_org,
-                sessionRows[0].github_username, sessionRows[0].github_token, sessionRows[0].has_org_scope,
-              );
-              if (ownership.isOwner) hasAccess = true;
-            } catch { /* not owner */ }
-          }
+      if (session) {
+        if (session.userId === audit.requester_id) {
+          hasAccess = true;
+        } else {
+          try {
+            const ownership = await resolveOwnership(
+              pool, session.userId, audit.github_org,
+              session.githubUsername, session.githubToken, session.hasOrgScope,
+            );
+            if (ownership.isOwner) hasAccess = true;
+          } catch { /* not owner */ }
         }
       }
       if (!hasAccess) {
@@ -1835,7 +1771,7 @@ router.post('/audit/:id/publish', requireAuth as any, async (req: Request, res: 
   try {
     // Verify ownership via GitHub
     const { rows } = await pool.query(
-      `SELECT a.id, p.github_org
+      `SELECT a.id, a.project_id, p.github_org
        FROM audits a
        JOIN projects p ON p.id = a.project_id
        WHERE a.id = $1`,
@@ -1844,6 +1780,12 @@ router.post('/audit/:id/publish', requireAuth as any, async (req: Request, res: 
 
     if (rows.length === 0) {
       res.status(404).json({ error: 'Audit not found' });
+      return;
+    }
+
+    // Validate that the audit belongs to a valid project
+    if (!rows[0].project_id) {
+      res.status(400).json({ error: 'Audit is not associated with a project' });
       return;
     }
 
@@ -1865,6 +1807,7 @@ router.post('/audit/:id/publish', requireAuth as any, async (req: Request, res: 
       [auditId]
     );
 
+    console.log(`Audit ${auditId} published by user ${userId}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('Error publishing:', err);
@@ -1880,7 +1823,7 @@ router.post('/audit/:id/unpublish', requireAuth as any, async (req: Request, res
 
   try {
     const { rows } = await pool.query(
-      `SELECT a.id, p.github_org
+      `SELECT a.id, a.project_id, p.github_org
        FROM audits a
        JOIN projects p ON p.id = a.project_id
        WHERE a.id = $1`,
@@ -1889,6 +1832,12 @@ router.post('/audit/:id/unpublish', requireAuth as any, async (req: Request, res
 
     if (rows.length === 0) {
       res.status(404).json({ error: 'Audit not found' });
+      return;
+    }
+
+    // Validate that the audit belongs to a valid project
+    if (!rows[0].project_id) {
+      res.status(400).json({ error: 'Audit is not associated with a project' });
       return;
     }
 
@@ -1910,6 +1859,7 @@ router.post('/audit/:id/unpublish', requireAuth as any, async (req: Request, res
       [auditId]
     );
 
+    console.log(`Audit ${auditId} unpublished by user ${userId}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('Error unpublishing:', err);
@@ -1981,7 +1931,7 @@ router.post('/audit/:id/notify-owner', requireAuth as any, async (req: Request, 
           'SELECT COUNT(*) as count FROM audit_findings WHERE audit_id = $1',
           [auditId]
         );
-        const count = parseInt(findingCount.rows[0].count);
+        const count = parseInt(findingCount.rows[0]?.count ?? 0);
         const maxSev = audit.max_severity || 'none';
 
         const title = `[CodeWatch] Security audit completed - ${count} finding${count !== 1 ? 's' : ''} (max: ${maxSev})`;
@@ -2037,43 +1987,42 @@ router.delete('/audit/:id', requireAuth as any, async (req: Request, res: Respon
   const userId = (req as any).userId;
   const pool = getPool();
 
+  // Use a single transaction with SELECT FOR UPDATE to prevent race conditions
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      'SELECT id, requester_id FROM audits WHERE id = $1',
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT id, requester_id FROM audits WHERE id = $1 FOR UPDATE',
       [auditId]
     );
 
     if (rows.length === 0) {
+      await client.query('ROLLBACK');
       res.status(404).json({ error: 'Audit not found' });
       return;
     }
 
     if (rows[0].requester_id !== userId) {
+      await client.query('ROLLBACK');
       res.status(403).json({ error: 'Only the audit requester can delete' });
       return;
     }
 
-    // Cascade delete in transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM audit_comments WHERE audit_id = $1', [auditId]);
-      await client.query('DELETE FROM audit_findings WHERE audit_id = $1', [auditId]);
-      await client.query('DELETE FROM audit_commits WHERE audit_id = $1', [auditId]);
-      await client.query('DELETE FROM audit_components WHERE audit_id = $1', [auditId]);
-      await client.query('DELETE FROM audits WHERE id = $1', [auditId]);
-      await client.query('COMMIT');
-    } catch (txErr) {
-      await client.query('ROLLBACK');
-      throw txErr;
-    } finally {
-      client.release();
-    }
+    // Cascade delete within the same transaction
+    await client.query('DELETE FROM audit_comments WHERE audit_id = $1', [auditId]);
+    await client.query('DELETE FROM audit_findings WHERE audit_id = $1', [auditId]);
+    await client.query('DELETE FROM audit_commits WHERE audit_id = $1', [auditId]);
+    await client.query('DELETE FROM audit_components WHERE audit_id = $1', [auditId]);
+    await client.query('DELETE FROM audits WHERE id = $1', [auditId]);
+    await client.query('COMMIT');
 
     res.status(204).end();
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error deleting audit:', err);
     res.status(500).json({ error: 'Failed to delete audit' });
+  } finally {
+    client.release();
   }
 });
 
@@ -2175,15 +2124,29 @@ router.post('/projects/:id/analyze-components', requireAuth as any, async (req: 
 
   const pool = getPool();
 
+  const userId = (req as any).userId;
+
   try {
-    // Verify project exists
+    // Verify project exists and check ownership
     const { rows: proj } = await pool.query(
-      'SELECT id FROM projects WHERE id = $1',
+      'SELECT id, created_by, github_org FROM projects WHERE id = $1',
       [projectId]
     );
     if (proj.length === 0) {
       res.status(404).json({ error: 'Project not found' });
       return;
+    }
+
+    const isCreator = proj[0].created_by === userId;
+    if (!isCreator) {
+      const compOwnership = await resolveOwnership(
+        pool, userId, proj[0].github_org,
+        (req as any).githubUsername, (req as any).githubToken, (req as any).hasOrgScope,
+      );
+      if (!compOwnership.isOwner) {
+        res.status(403).json({ error: 'Only the project creator or owner can analyze components' });
+        return;
+      }
     }
 
     // Get repos with branch selection

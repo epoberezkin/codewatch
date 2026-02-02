@@ -169,12 +169,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    // Repos
+    // Repos — add target="_blank" rel="noopener" for external GitHub links (Issue #71)
     const reposHtml = project.repos.map(r => `
       <div class="card" style="margin-bottom: 0.5rem;">
         <div class="flex-between">
           <div>
-            <strong>${escapeHtml(r.repoName)}</strong>
+            <strong>${r.repoUrl ? `<a href="${escapeHtml(r.repoUrl)}" target="_blank" rel="noopener">${escapeHtml(r.repoName)}</a>` : escapeHtml(r.repoName)}</strong>
             ${r.language ? `<span class="text-sm text-muted"> &middot; ${escapeHtml(r.language)}</span>` : ''}
             ${r.license ? `<span class="text-sm text-muted"> &middot; ${escapeHtml(r.license)}</span>` : ''}
           </div>
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (currentUser) {
           action = ` <button class="btn btn-sm btn-secondary add-as-project-btn" data-dep-id="${dep.id}" data-name="${escapeHtml(dep.name)}" data-url="${dep.sourceRepoUrl ? escapeHtml(dep.sourceRepoUrl) : ''}">Add as Project</button>`;
         } else if (dep.sourceRepoUrl) {
-          action = ` <a href="${escapeHtml(dep.sourceRepoUrl)}" target="_blank" class="text-sm">source</a>`;
+          action = ` <a href="${escapeHtml(dep.sourceRepoUrl)}" target="_blank" rel="noopener" class="text-sm">source</a>`;
         }
         html += `<li>${escapeHtml(dep.name)}${version}${action}</li>`;
       }
@@ -238,47 +238,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     setHtml('dependencies-list', html);
 
-    // Attach "Add as Project" click handlers
-    document.querySelectorAll<HTMLButtonElement>('.add-as-project-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const depId = btn.dataset.depId!;
-        const depName = btn.dataset.name!;
-        const sourceUrl = btn.dataset.url || '';
-
-        if (!sourceUrl) {
-          alert('No source repository URL available for this dependency.');
-          return;
-        }
-
-        // Extract org and repo from GitHub URL
-        const match = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
-        if (!match) {
-          alert('Source URL is not a recognized GitHub repository.');
-          return;
-        }
-
-        const githubOrg = match[1];
-        const repoName = match[2].replace(/\.git$/, '');
-
-        if (!confirm(`Add "${depName}" (https://github.com/${githubOrg}/${repoName}) as a new CodeWatch project?`)) return;
-
-        btn.disabled = true;
-        btn.textContent = 'Adding...';
-        try {
-          const newProject = await apiPost<{ projectId: string }>('/api/projects', {
-            githubOrg,
-            repoNames: [repoName],
-          });
-          // Link the dependency to the new project
-          await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: newProject.projectId });
-          btn.outerHTML = `<a href="/project.html?projectId=${newProject.projectId}" class="btn btn-sm btn-secondary">View Project</a>`;
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = 'Add as Project';
-          alert(err instanceof Error ? err.message : 'Failed to add as project');
-        }
-      });
-    });
+    // Attach "Add as Project" click handlers using shared helper
+    attachAddAsProjectHandlers('.add-as-project-btn');
   }
 
   function renderAudits(audits: ProjectDetail['audits']) {
@@ -353,7 +314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           await apiFetch(`/api/projects/${project.id}`, { method: 'DELETE' });
           window.location.href = '/projects.html';
         } catch (err) {
-          alert(err instanceof Error ? err.message : 'Failed to delete project');
+          showError(err instanceof Error ? err.message : 'Failed to delete project');
         }
       });
     }

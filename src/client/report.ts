@@ -110,6 +110,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       ${data.commits.map(c => `<span class="text-mono">${escapeHtml(c.repoName)}@${c.commitSha.substring(0, 7)}</span>`).join('')}
     `);
 
+    // "Back to Project" link (Issue #28)
+    const backLink = $('back-to-project');
+    if (backLink) {
+      (backLink as HTMLAnchorElement).href = `/project.html?projectId=${data.projectId}`;
+      show(backLink);
+    } else {
+      // Create one if not in HTML
+      const reportHeader = $('report-title')?.parentElement;
+      if (reportHeader) {
+        const link = document.createElement('a');
+        link.href = `/project.html?projectId=${data.projectId}`;
+        link.className = 'btn btn-sm btn-secondary';
+        link.textContent = 'Back to Project';
+        link.id = 'back-to-project';
+        reportHeader.prepend(link);
+      }
+    }
+
     // Severity summary
     const sevOrder = ['critical', 'high', 'medium', 'low', 'informational'];
     const sevHtml = sevOrder
@@ -260,45 +278,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       setHtml('dependencies-content', depsHtml);
 
-      // Attach "Add as Project" handlers for dependencies
-      document.querySelectorAll<HTMLButtonElement>('.add-dep-project-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const depId = btn.dataset.depId!;
-          const depName = btn.dataset.name!;
-          const sourceUrl = btn.dataset.url || '';
-
-          if (!sourceUrl) {
-            alert('No source repository URL available for this dependency.');
-            return;
-          }
-
-          const match = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
-          if (!match) {
-            alert('Source URL is not a recognized GitHub repository.');
-            return;
-          }
-
-          const githubOrg = match[1];
-          const repoName = match[2].replace(/\.git$/, '');
-
-          if (!confirm(`Add "${depName}" (https://github.com/${githubOrg}/${repoName}) as a new CodeWatch project?`)) return;
-
-          btn.disabled = true;
-          btn.textContent = 'Adding...';
-          try {
-            const newProject = await apiPost<{ projectId: string }>('/api/projects', {
-              githubOrg,
-              repoNames: [repoName],
-            });
-            await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: newProject.projectId });
-            btn.outerHTML = `<a href="/project.html?projectId=${newProject.projectId}" class="btn btn-sm btn-secondary">View Project</a>`;
-          } catch (err) {
-            btn.disabled = false;
-            btn.textContent = 'Add as Project';
-            alert(err instanceof Error ? err.message : 'Failed to add as project');
-          }
-        });
-      });
+      // Attach "Add as Project" handlers using shared helper
+      attachAddAsProjectHandlers('.add-dep-project-btn');
     }
 
     // Redacted notice
@@ -345,14 +326,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (statusFilter) {
       const presentStatuses = new Set(findings.map(f => f.status));
-      const statusLabels: Record<string, string> = {
-        open: 'Open', fixed: 'Fixed', false_positive: 'False Positive',
-        accepted: 'Accepted', wont_fix: "Won't Fix",
-      };
       statusFilter.innerHTML = '<option value="all">All Statuses</option>' +
-        Object.entries(statusLabels).filter(([k]) => presentStatuses.has(k))
-          .map(([k, v]) => `<option value="${k}">${v}</option>`)
+        Array.from(presentStatuses)
+          .map(k => `<option value="${k}">${formatStatus(k)}</option>`)
           .join('');
+    }
+
+    // Filter count badge (Issue #70)
+    function updateFilterCount() {
+      const sev = sevFilter?.value || 'all';
+      const status = statusFilter?.value || 'all';
+      let activeCount = 0;
+      if (sev !== 'all') activeCount++;
+      if (status !== 'all') activeCount++;
+      const badge = $('filter-count-badge');
+      if (badge) {
+        badge.textContent = activeCount > 0 ? `${activeCount} active` : '';
+        badge.style.display = activeCount > 0 ? 'inline' : 'none';
+      } else if (activeCount > 0) {
+        // Create badge if not present in HTML
+        const filtersHeader = sevFilter?.parentElement;
+        if (filtersHeader) {
+          const span = document.createElement('span');
+          span.id = 'filter-count-badge';
+          span.className = 'badge badge-running';
+          span.textContent = `${activeCount} active`;
+          filtersHeader.appendChild(span);
+        }
+      }
     }
 
     function applyFilters() {
@@ -363,6 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         (status === 'all' || f.status === status)
       );
       renderFindingsList(filtered);
+      updateFilterCount();
     }
 
     sevFilter?.addEventListener('change', applyFilters);
@@ -386,7 +388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="finding-header">
           <span class="finding-title">${isRedacted ? '<em>[Redacted]</em>' : escapeHtml(f.title)}</span>
           <div class="finding-header-right">
-            <span class="badge badge-${f.status === 'open' ? 'pending' : f.status === 'fixed' ? 'completed' : 'running'}">${escapeHtml((f.status || '').replace(/_/g, ' '))}</span>
+            <span class="badge badge-${f.status === 'open' ? 'pending' : f.status === 'fixed' ? 'completed' : 'running'}">${escapeHtml(formatStatus(f.status))}</span>
             <span class="severity ${severityClass(f.severity)}">${escapeHtml(f.severity)}</span>
           </div>
         </div>
@@ -404,11 +406,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         ${isOwner ? `
         <div class="finding-actions">
           <select class="finding-status-select" data-finding-id="${f.id}">
-            <option value="open"${f.status === 'open' ? ' selected' : ''}>Open</option>
-            <option value="fixed"${f.status === 'fixed' ? ' selected' : ''}>Fixed</option>
-            <option value="false_positive"${f.status === 'false_positive' ? ' selected' : ''}>False Positive</option>
-            <option value="accepted"${f.status === 'accepted' ? ' selected' : ''}>Accepted</option>
-            <option value="wont_fix"${f.status === 'wont_fix' ? ' selected' : ''}>Won't Fix</option>
+            <option value="open"${f.status === 'open' ? ' selected' : ''}>${formatStatus('open')}</option>
+            <option value="fixed"${f.status === 'fixed' ? ' selected' : ''}>${formatStatus('fixed')}</option>
+            <option value="false_positive"${f.status === 'false_positive' ? ' selected' : ''}>${formatStatus('false_positive')}</option>
+            <option value="accepted"${f.status === 'accepted' ? ' selected' : ''}>${formatStatus('accepted')}</option>
+            <option value="wont_fix"${f.status === 'wont_fix' ? ' selected' : ''}>${formatStatus('wont_fix')}</option>
           </select>
         </div>
         ` : ''}
@@ -432,13 +434,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const badge = card?.querySelector('.finding-header-right .badge');
             if (badge) {
               badge.className = `badge badge-${el.value === 'open' ? 'pending' : el.value === 'fixed' ? 'completed' : 'running'}`;
-              badge.textContent = el.value.replace(/_/g, ' ');
+              badge.textContent = formatStatus(el.value);
             }
             // Update in-memory finding state on success
             const masterFinding = reportData?.findings.find(ff => ff.id === findingId);
             if (masterFinding) masterFinding.status = el.value;
           } catch (err) {
-            alert(err instanceof Error ? err.message : 'Failed to update status');
+            showError(err instanceof Error ? err.message : 'Failed to update status');
             // Revert to last known state
             const finding = reportData?.findings.find(ff => ff.id === findingId);
             if (finding) el.value = finding.status;
@@ -476,14 +478,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const submitCommentBtn = $('submit-comment-btn');
   submitCommentBtn?.addEventListener('click', async () => {
     const input = $('comment-input') as HTMLTextAreaElement | null;
-    if (!input?.value.trim() || !auditId) return;
+    if (!input?.value.trim()) return;
+
+    // Null check for auditId (Issue #8)
+    if (!auditId) {
+      showError('Cannot submit comment: audit ID is missing');
+      return;
+    }
 
     try {
       await apiPost(`/api/audit/${auditId}/comments`, { content: input.value.trim() });
       input.value = '';
       loadComments(auditId);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to post comment');
+      showError(err instanceof Error ? err.message : 'Failed to post comment');
     }
   });
 
@@ -495,7 +503,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await apiPost(`/api/audit/${auditId}/publish`, {});
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to publish');
+      showError(err instanceof Error ? err.message : 'Failed to publish');
     }
   });
 
@@ -507,7 +515,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await apiPost(`/api/audit/${auditId}/unpublish`, {});
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to unpublish');
+      showError(err instanceof Error ? err.message : 'Failed to unpublish');
     }
   });
 
@@ -518,13 +526,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const result = await apiPost<{ ok: boolean; publishableAfter: string | null }>(`/api/audit/${auditId}/notify-owner`, {});
       if (result.publishableAfter) {
-        alert(`Owner notified. Full report will be available after ${new Date(result.publishableAfter).toLocaleDateString()}.`);
+        showError(`Owner notified. Full report will be available after ${new Date(result.publishableAfter).toLocaleDateString()}.`);
       } else {
-        alert('Owner notified. Report has no time-gated findings.');
+        showError('Owner notified. Report has no time-gated findings.');
       }
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to notify owner');
+      showError(err instanceof Error ? err.message : 'Failed to notify owner');
     }
   });
 });

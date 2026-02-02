@@ -113,6 +113,7 @@ export async function listOrgRepos(org: string, token?: string): Promise<GitHubR
     if (!res.ok) {
       // Try as a user if org endpoint fails
       if (res.status === 404 && page === 1) {
+        console.warn(`[GitHub] Org endpoint returned 404 for "${org}", falling back to user repos`);
         return listUserRepos(org, token);
       }
       throw new Error(`GitHub API error: ${res.status}`);
@@ -293,8 +294,8 @@ export async function getCommitDate(
     { headers }
   );
   if (!res.ok) throw new Error(`GitHub API error fetching commit date: ${res.status}`);
-  const body = await res.json() as { commit: { committer: { date: string } } };
-  return new Date(body.commit.committer.date);
+  const body = await res.json() as { commit: { author: { date: string }; committer: { date: string } } };
+  return new Date(body.commit.author.date);
 }
 
 // ---------- Issue Creation (for owner notification) ----------

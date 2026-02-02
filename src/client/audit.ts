@@ -33,21 +33,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   let pollInterval: ReturnType<typeof setInterval> | null = null;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 5;
 
   async function poll() {
     try {
       const data = await apiFetch<AuditStatus>(`/api/audit/${auditId}`);
+      consecutiveErrors = 0; // Reset on success
       renderStatus(data);
 
-      if (data.status === 'completed' || data.status === 'failed') {
+      if (data.status === 'completed' || data.status === 'completed_with_warnings' || data.status === 'failed') {
         if (pollInterval) {
           clearInterval(pollInterval);
           pollInterval = null;
         }
       }
     } catch (err) {
-      // Don't stop polling on transient errors
+      consecutiveErrors++;
       console.error('Poll error:', err);
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+        showError(`Lost connection to audit status after ${MAX_CONSECUTIVE_ERRORS} consecutive errors. Please refresh the page.`);
+      }
     }
   }
 
@@ -62,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
       analyzing: 'badge-running',
       synthesizing: 'badge-running',
       completed: 'badge-completed',
+      completed_with_warnings: 'badge-completed',
       failed: 'badge-failed',
     };
     setHtml('audit-status-badge', `<span class="badge ${statusMap[data.status] || ''}">${escapeHtml(data.status)}</span>`);
@@ -93,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
       analyzing: `Analyzing code (${done}/${total} files)`,
       synthesizing: 'Generating report...',
       completed: 'Audit complete',
+      completed_with_warnings: 'Audit complete (with warnings)',
       failed: 'Audit failed',
     };
     setText('progress-text', statusLabels[data.status] || data.status);
@@ -112,15 +124,17 @@ document.addEventListener('DOMContentLoaded', () => {
       setText('findings-summary', `${totalFindings} finding${totalFindings !== 1 ? 's' : ''}`);
     }
 
-    // Completion card
-    if (data.status === 'completed') {
+    // Completion card — handle both completed and completed_with_warnings
+    if (data.status === 'completed' || data.status === 'completed_with_warnings') {
       show('completion-card');
       const link = $('view-report-link') as HTMLAnchorElement | null;
       if (link) link.href = `/report.html?auditId=${data.id}`;
-      setText('completion-summary',
-        `Found ${totalFindings} finding${totalFindings !== 1 ? 's' : ''}.` +
-        (data.maxSeverity ? ` Max severity: ${data.maxSeverity}.` : '')
-      );
+      let summaryText = `Found ${totalFindings} finding${totalFindings !== 1 ? 's' : ''}.` +
+        (data.maxSeverity ? ` Max severity: ${data.maxSeverity}.` : '');
+      if (data.status === 'completed_with_warnings') {
+        summaryText += ' Some warnings were generated during the audit.';
+      }
+      setText('completion-summary', summaryText);
     }
 
     // Error
@@ -149,6 +163,21 @@ document.addEventListener('DOMContentLoaded', () => {
       </li>
     `).join('');
   }
+
+  // Pause/resume polling on visibility change (Issue #26)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    } else {
+      if (!pollInterval) {
+        pollInterval = setInterval(poll, 3000);
+        poll(); // immediate poll on return
+      }
+    }
+  });
 
   // Start polling
   poll();

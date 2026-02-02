@@ -395,6 +395,45 @@ describe('Planning service', () => {
       expect(plan).toHaveLength(4); // ghost.ts skipped
       expect(plan.every(p => p.file !== 'repo/ghost.ts')).toBe(true);
     });
+
+    it('returns empty array for empty ranked files list', () => {
+      const emptyRanked: RankedFile[] = [];
+      const plan = selectFilesByBudget(emptyRanked, allFiles, 'full');
+      expect(plan).toHaveLength(0);
+    });
+
+    it('returns empty array for empty scanned files list', () => {
+      const emptyScanned: ScannedFile[] = [];
+      const plan = selectFilesByBudget(rankedFiles, emptyScanned, 'full');
+      expect(plan).toHaveLength(0);
+    });
+
+    it('handles zero-token files correctly', () => {
+      const zeroTokenRanked: RankedFile[] = [
+        { file: 'repo/empty.ts', priority: 5, reason: 'Empty file' },
+      ];
+      const zeroTokenScanned: ScannedFile[] = [
+        { relativePath: 'repo/empty.ts', size: 0, roughTokens: 0 },
+      ];
+      const plan = selectFilesByBudget(zeroTokenRanked, zeroTokenScanned, 'full');
+      expect(plan).toHaveLength(1);
+      expect(plan[0].tokens).toBe(0);
+    });
+
+    it('includes at least one file even when all exceed budget', () => {
+      const bigRanked: RankedFile[] = [
+        { file: 'repo/huge1.ts', priority: 10, reason: 'Large file 1' },
+        { file: 'repo/huge2.ts', priority: 8, reason: 'Large file 2' },
+      ];
+      const bigScanned: ScannedFile[] = [
+        { relativePath: 'repo/huge1.ts', size: 33000, roughTokens: 10000 },
+        { relativePath: 'repo/huge2.ts', size: 33000, roughTokens: 10000 },
+      ];
+      // opportunistic budget = 20000 * 0.10 = 2000, but each file is 10000
+      const plan = selectFilesByBudget(bigRanked, bigScanned, 'opportunistic');
+      expect(plan).toHaveLength(1);
+      expect(plan[0].file).toBe('repo/huge1.ts');
+    });
   });
 
   describe('Combined planning phase (runPlanningPhase)', () => {

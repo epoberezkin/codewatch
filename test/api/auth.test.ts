@@ -237,6 +237,20 @@ describe('Auth API', () => {
       const body = await res.json();
       expect(body.hasOrgScope).toBe(true);
     });
+
+    it('returns 401 for expired session', async () => {
+      const user = await createTestUser(ctx.pool, { githubId: 99997, username: 'expireduser' });
+      const session = await createTestSession(ctx.pool, user.id);
+
+      // Manually set the session's expires_at to the past
+      await ctx.pool.query(
+        `UPDATE sessions SET expires_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+        [session.sessionId]
+      );
+
+      const res = await authenticatedFetch(`${ctx.baseUrl}/auth/me`, session.cookie);
+      expect(res.status).toBe(401);
+    });
   });
 
   describe('POST /auth/logout', () => {

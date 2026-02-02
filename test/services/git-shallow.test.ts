@@ -165,7 +165,7 @@ describe('getCommitDate', () => {
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        commit: { committer: { date: mockDate } },
+        commit: { author: { date: mockDate } },
       }),
     });
 
@@ -185,7 +185,7 @@ describe('getCommitDate', () => {
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        commit: { committer: { date: '2025-01-01T00:00:00Z' } },
+        commit: { author: { date: '2025-01-01T00:00:00Z' } },
       }),
     });
 

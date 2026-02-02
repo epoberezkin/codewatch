@@ -4,6 +4,7 @@ import * as path from 'path';
 import { callClaude, parseJsonResponse } from './claude';
 import type { ScannedFile } from './git';
 import { loadPrompt, renderPrompt } from './prompts';
+import { BUDGET_PERCENTAGES } from './tokens';
 
 // ---------- Constants ----------
 
@@ -222,20 +223,8 @@ export function selectFilesByBudget(
   const totalTokens = allFiles.reduce((sum, f) => sum + f.roughTokens, 0);
 
   // Budget by level (analysis portion only, not counting planning overhead)
-  let tokenBudget: number;
-  switch (level) {
-    case 'full':
-      tokenBudget = totalTokens; // 100%
-      break;
-    case 'thorough':
-      tokenBudget = Math.round(totalTokens * 0.33); // 33%
-      break;
-    case 'opportunistic':
-      tokenBudget = Math.round(totalTokens * 0.10); // 10%
-      break;
-    default:
-      tokenBudget = totalTokens;
-  }
+  const budgetPct = BUDGET_PERCENTAGES[level] ?? 1.0;
+  const tokenBudget = budgetPct === 1.0 ? totalTokens : Math.round(totalTokens * budgetPct);
 
   // Sort ranked files by priority descending
   const sorted = [...rankedFiles].sort((a, b) => b.priority - a.priority);

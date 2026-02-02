@@ -4,17 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
 import { parseJsonResponse } from './claude';
-import { readFileContent } from './git';
+import { readFileContent, SKIP_DIRS } from './git';
 import type { ScannedFile } from './git';
 import { loadPrompt, renderPrompt } from './prompts';
 
 // ---------- Constants ----------
-
-// Redefined from git.ts (not exported there)
-const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'vendor', 'dist', 'build', '.next', '__pycache__',
-  '.tox', '.venv', 'venv', 'target', '.gradle', 'Pods',
-]);
 
 const SONNET_MODEL = 'claude-sonnet-4-5-20250929';
 const SONNET_INPUT_PRICE = 3;   // $/Mtok
@@ -22,6 +16,7 @@ const SONNET_OUTPUT_PRICE = 15;  // $/Mtok
 const MAX_TURNS = 40;
 const MAX_RETRIES = 5;
 const MAX_READ_LINES = 500;
+const MAX_CONSECUTIVE_ERRORS = 5;
 
 // ---------- Types ----------
 
@@ -216,6 +211,8 @@ export async function runComponentAnalysis(
     let inputTokensUsed = 0;
     let outputTokensUsed = 0;
 
+    let consecutiveErrors = 0;
+
     // Agentic loop
     while (turnsUsed < MAX_TURNS) {
       const response = await createMessageWithRetry(client, systemPrompt, TOOLS, messages);
@@ -226,13 +223,15 @@ export async function runComponentAnalysis(
       const costUsd = (inputTokensUsed / 1_000_000) * SONNET_INPUT_PRICE +
                        (outputTokensUsed / 1_000_000) * SONNET_OUTPUT_PRICE;
 
-      // Update progress in DB
-      await pool.query(
-        `UPDATE component_analyses
-         SET turns_used = $1, input_tokens_used = $2, output_tokens_used = $3, cost_usd = $4
-         WHERE id = $5`,
-        [turnsUsed, inputTokensUsed, outputTokensUsed, costUsd, analysisId]
-      );
+      // Update progress in DB (every 3 turns to reduce DB roundtrips)
+      if (turnsUsed % 3 === 0 || response.stop_reason === 'end_turn') {
+        await pool.query(
+          `UPDATE component_analyses
+           SET turns_used = $1, input_tokens_used = $2, output_tokens_used = $3, cost_usd = $4
+           WHERE id = $5`,
+          [turnsUsed, inputTokensUsed, outputTokensUsed, costUsd, analysisId]
+        );
+      }
 
       console.log(
         `[ComponentAnalysis ${analysisId.substring(0, 8)}] Turn ${turnsUsed}/${MAX_TURNS} ` +
@@ -278,6 +277,7 @@ export async function runComponentAnalysis(
 
         // Execute tool calls and build tool results
         const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }> = [];
+        let hasError = false;
 
         for (const block of response.content) {
           if (block.type === 'tool_use') {
@@ -289,6 +289,7 @@ export async function runComponentAnalysis(
                 content: toolResult,
               });
             } catch (toolErr) {
+              hasError = true;
               toolResults.push({
                 type: 'tool_result',
                 tool_use_id: block.id,
@@ -297,6 +298,16 @@ export async function runComponentAnalysis(
               });
             }
           }
+        }
+
+        // Track consecutive tool errors (#4)
+        if (hasError) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            throw new Error(`Tool execution failed ${MAX_CONSECUTIVE_ERRORS} times consecutively, aborting analysis`);
+          }
+        } else {
+          consecutiveErrors = 0;
         }
 
         messages.push({ role: 'user', content: toolResults as any });
@@ -381,8 +392,11 @@ function executeReadFile(repo: RepoInfo, filePath: string): string {
   if (!resolved.startsWith(path.resolve(repo.localPath))) {
     return `Error: path "${filePath}" is outside repository bounds`;
   }
-  const content = readFileContent(repo.localPath, filePath);
-  if (content === null) return `Error: file "${filePath}" not found or unreadable in ${repo.name}`;
+  const { content, error } = readFileContent(repo.localPath, filePath);
+  if (content === null) {
+    if (error === 'path_traversal') return `Error: path "${filePath}" is outside repository bounds`;
+    return `Error: file "${filePath}" not found or unreadable in ${repo.name}`;
+  }
 
   const lines = content.split('\n');
   if (lines.length > MAX_READ_LINES) {
@@ -414,11 +428,12 @@ async function storeResults(
   result: ComponentAnalysisResult,
   repoData: RepoInfo[],
 ): Promise<void> {
-  // Remove old components not referenced by any audit
+  // Remove old components not referenced by any audit or finding (#19)
   await pool.query(
     `DELETE FROM components
      WHERE project_id = $1
-     AND id NOT IN (SELECT component_id FROM audit_components WHERE component_id IS NOT NULL)`,
+     AND id NOT IN (SELECT component_id FROM audit_components WHERE component_id IS NOT NULL)
+     AND id NOT IN (SELECT component_id FROM audit_findings WHERE component_id IS NOT NULL)`,
     [projectId]
   );
 

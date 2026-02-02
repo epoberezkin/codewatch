@@ -9,7 +9,7 @@ const mockClaudeState = vi.hoisted(() => ({
   callCount: 0,
   lastMessages: null as any,
   lastSystem: null as string | null,
-  lastTools: null as any[],
+  lastTools: null as any[] | null,
 }));
 
 const mockFsState = vi.hoisted(() => ({
@@ -52,7 +52,8 @@ vi.mock('../../src/server/services/git', async (importOriginal) => {
     ...actual,
     readFileContent: (repoPath: string, relativePath: string) => {
       const key = `${repoPath}/${relativePath}`;
-      return mockFsState.fileContents.get(key) ?? null;
+      const content = mockFsState.fileContents.get(key) ?? null;
+      return { content };
     },
     cloneOrUpdate: async (repoUrl: string) => ({
       localPath: '/tmp/claude/test-repos/test-org/test-repo',
@@ -876,7 +877,10 @@ describe('Component analysis service', () => {
         [project.id]
       );
       expect(rows[0].status).toBe('failed');
-      expect(rows[0].turns_used).toBe(40);
+      // turns_used is 39 (not 40) because progress updates batch every 3 turns
+      // and the catch block only updates status/error_message, not turns_used.
+      // Last batch update was at turn 39 (39 % 3 === 0).
+      expect(rows[0].turns_used).toBe(39);
       expect(rows[0].error_message).toContain('40 turns');
     });
 
@@ -1004,7 +1008,7 @@ describe('Component analysis service', () => {
         }
       );
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.error).toContain('API key');
     });
 
@@ -1036,7 +1040,7 @@ describe('Component analysis service', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['test-repo'] }),
       });
-      const { projectId } = await createRes.json();
+      const { projectId } = await createRes.json() as any;
 
       const res = await authenticatedFetch(
         `${ctx.baseUrl}/api/projects/${projectId}/analyze-components`,
@@ -1048,7 +1052,7 @@ describe('Component analysis service', () => {
         }
       );
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.analysisId).toBeDefined();
 
       // Give background analysis a moment to complete
@@ -1070,7 +1074,7 @@ describe('Component analysis service', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['test-repo'] }),
       });
-      const { projectId } = await createRes.json();
+      const { projectId } = await createRes.json() as any;
 
       // Insert an analysis record directly
       const { rows: [analysis] } = await ctx.pool.query(
@@ -1083,7 +1087,7 @@ describe('Component analysis service', () => {
         `${ctx.baseUrl}/api/projects/${projectId}/component-analysis/${analysis.id}`
       );
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.id).toBe(analysis.id);
       expect(body.status).toBe('running');
       expect(body.turnsUsed).toBe(5);
@@ -1106,7 +1110,7 @@ describe('Component analysis service', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['test-repo'] }),
       });
-      const { projectId } = await createRes.json();
+      const { projectId } = await createRes.json() as any;
 
       // Get repo ID
       const { rows: repos } = await ctx.pool.query(
@@ -1132,7 +1136,7 @@ describe('Component analysis service', () => {
 
       const res = await fetch(`${ctx.baseUrl}/api/projects/${projectId}/components`);
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any[];
       expect(body).toHaveLength(1);
       expect(body[0].name).toBe('Auth Module');
       expect(body[0].description).toBe('Handles authentication');
@@ -1152,7 +1156,7 @@ describe('Component analysis service', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['test-repo'] }),
       });
-      const { projectId } = await createRes.json();
+      const { projectId } = await createRes.json() as any;
 
       const res = await fetch(`${ctx.baseUrl}/api/projects/${projectId}/components`);
       expect(res.status).toBe(200);

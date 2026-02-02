@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { callClaude, parseJsonResponse } from './claude';
 import { cloneOrUpdate, scanCodeFiles, readFileContent, getDefaultBranchName, diffBetweenCommits } from './git';
 import type { ScannedFile } from './git';
-import { roughTokenCount } from './tokens';
+import { roughTokenCount, SECURITY_CRITICAL_PATTERNS, BUDGET_PERCENTAGES } from './tokens';
 import { getCommitDate } from './github';
 import { runPlanningPhase } from './planning';
 import { loadPrompt, renderPrompt } from './prompts';
@@ -54,14 +54,6 @@ interface AuditOptions {
   baseAuditId?: string;
   componentIds?: string[];
 }
-
-// Security-critical path patterns for thorough mode
-const SECURITY_CRITICAL_PATTERNS = [
-  /\bauth\b/i, /\bcrypto\b/i, /\bapi\b/i, /\broute/i, /\bmiddleware\b/i,
-  /\bhandler/i, /\bcontroller/i, /\bmodel/i, /\bdb\b/i, /\bdatabase\b/i,
-  /\bconfig\b/i, /\bsecur/i, /\bsession\b/i, /\btoken\b/i, /\bpassword\b/i,
-  /\bpermission\b/i, /\baccess\b/i, /\bvalidat/i, /\bsaniti/i,
-];
 
 const MAX_BATCH_TOKENS = 150000;
 
@@ -230,8 +222,13 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         try {
           diff = await diffBetweenCommits(repo.localPath, baseCommit.commit_sha, repo.headSha);
         } catch (diffErr) {
-          // Shallow clone may not contain the base SHA — treat all files as added
-          console.warn(`[Audit ${auditId.substring(0, 8)}] diff failed for ${repo.name} (base SHA may be outside shallow history), treating all files as changed:`, (diffErr as Error).message);
+          // Shallow clone may not contain the base SHA — treat all files as added (#20)
+          const msg = `diff failed for ${repo.name} (base SHA may be outside shallow history), auditing all files`;
+          console.warn(`[Audit ${auditId.substring(0, 8)}] ${msg}:`, (diffErr as Error).message);
+          await pool.query(
+            `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
+            [JSON.stringify({ warning: msg }), auditId]
+          );
           for (const f of repo.files) {
             diffFilesAdded.push(f.relativePath);
           }
@@ -268,7 +265,16 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         [options.baseAuditId]
       );
 
+      const inheritedFingerprints = new Set<string>();
       for (const finding of baseFindings) {
+        // Skip duplicate fingerprints from base audit (#5)
+        if (finding.fingerprint && inheritedFingerprints.has(finding.fingerprint)) {
+          continue;
+        }
+        if (finding.fingerprint) {
+          inheritedFingerprints.add(finding.fingerprint);
+        }
+
         let filePath = finding.file_path;
         let status = finding.status;
 
@@ -317,6 +323,10 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       'SELECT category FROM projects WHERE id = $1',
       [projectId]
     );
+
+    if (existingProject.length === 0) {
+      throw new Error(`Project ${projectId} not found`);
+    }
 
     let classification: ClassificationResult | null = null;
     if (!existingProject[0].category) {
@@ -394,8 +404,13 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       const plannedFileSet = new Set(plan.map(p => p.file));
       filesToAnalyze = allFiles.filter(f => plannedFileSet.has(f.relativePath));
 
-      // Fallback: if planning returned no files, use old heuristic
+      // Fallback: if planning returned no files, use old heuristic (#21)
       if (filesToAnalyze.length === 0) {
+        console.warn(`[Audit ${auditId.substring(0, 8)}] Planning returned 0 files, falling back to heuristic file selection`);
+        await pool.query(
+          `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
+          [JSON.stringify({ warning: 'Planning phase returned no files, using heuristic selection' }), auditId]
+        );
         filesToAnalyze = selectFiles(allFiles, level);
       }
 
@@ -439,7 +454,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         const relPath = rest.join('/');
         const repo = repoData.find(r => r.name === repoName);
         if (!repo) return `// File: ${f.relativePath}\n// Could not read file`;
-        const content = readFileContent(repo.localPath, relPath);
+        const { content } = readFileContent(repo.localPath, relPath);
         return `// File: ${f.relativePath}\n${content || '// Could not read file'}`;
       }).join('\n\n---\n\n');
 
@@ -541,9 +556,9 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     // a report missing batches could hide critical findings and give false confidence.
     if (batchesFailed > 0) {
       const msg = batchesSucceeded === 0
-        ? `All ${batchesFailed} analysis batches failed. ${lastBatchError}`
-        : `${batchesFailed} of ${batches.length} analysis batches failed — ` +
-          `incomplete analysis cannot produce a reliable security report. ${lastBatchError}`;
+        ? `All ${batchesFailed} analysis batch(es) failed. Last error: ${lastBatchError}`
+        : `Batch ${batchesSucceeded + 1} of ${batches.length} failed — ` +
+          `incomplete analysis cannot produce a reliable security report. Error: ${lastBatchError}`;
       console.error(`[Audit ${auditId.substring(0, 8)}] ${msg}`);
       await pool.query(
         `UPDATE audits SET status = 'failed', error_message = $1, actual_cost_usd = $2 WHERE id = $3`,
@@ -649,15 +664,17 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         ]
       );
     } catch (err) {
-      console.error('Synthesis error:', err);
-      // Complete without synthesis
+      console.error(`[Audit ${auditId.substring(0, 8)}] Synthesis error:`, err);
+      // Complete with warnings — findings are valid but no summary
       await pool.query(
         `UPDATE audits SET
-          status = 'completed',
-          actual_cost_usd = $1,
+          status = 'completed_with_warnings',
+          error_message = $1,
+          actual_cost_usd = $2,
           completed_at = NOW()
-         WHERE id = $2`,
-        [actualCostUsd, auditId]
+         WHERE id = $3`,
+        [`Audit completed but report synthesis failed: ${(err as Error).message}. Findings are available but executive summary could not be generated.`,
+         actualCostUsd, auditId]
       );
     }
   } catch (err) {
@@ -682,7 +699,7 @@ async function classifyProject(
   const repoListParts: string[] = [];
   for (const repo of repoData) {
     const dirTree = repo.files.map(f => f.relativePath).sort().join('\n');
-    const readmeContent = readFileContent(repo.localPath, 'README.md') || '';
+    const readmeContent = readFileContent(repo.localPath, 'README.md').content || '';
     repoListParts.push(
       `## Repository: ${repo.name}\n\nDirectory structure:\n${dirTree}\n\nREADME:\n${readmeContent.substring(0, 5000)}`
     );
@@ -726,7 +743,8 @@ async function classifyProject(
 // ---------- File Selection ----------
 
 function selectFiles(allFiles: ScannedFile[], level: string): ScannedFile[] {
-  if (level === 'full') return allFiles;
+  const budgetPct = BUDGET_PERCENTAGES[level] ?? 1.0;
+  if (budgetPct >= 1.0) return allFiles;
 
   // Score files by security criticality
   const scored = allFiles.map(f => ({
@@ -737,16 +755,8 @@ function selectFiles(allFiles: ScannedFile[], level: string): ScannedFile[] {
   }));
   scored.sort((a, b) => b.score - a.score);
 
-  if (level === 'thorough') {
-    const count = Math.ceil(allFiles.length * 0.33);
-    return scored.slice(0, count);
-  }
-  if (level === 'opportunistic') {
-    const count = Math.ceil(allFiles.length * 0.10);
-    return scored.slice(0, Math.max(1, count));
-  }
-
-  return allFiles;
+  const count = Math.ceil(allFiles.length * budgetPct);
+  return scored.slice(0, Math.max(1, count));
 }
 
 // ---------- Batching ----------
@@ -809,7 +819,9 @@ async function updateStatus(pool: Pool, auditId: string, status: string): Promis
 
 function generateFingerprint(finding: FindingResult): string {
   // SHA-256 based fingerprint for dedup across incremental audits
-  const raw = `${finding.file}:${finding.title}:${finding.code_snippet?.substring(0, 100) || ''}`;
+  const snippet = (finding.code_snippet ?? '').substring(0, 100);
+  const lineRange = finding.line_start ? `${finding.line_start}-${finding.line_end || finding.line_start}` : '';
+  const raw = `${finding.file}:${lineRange}:${finding.title}:${snippet}`;
   return crypto.createHash('sha256').update(raw).digest('hex').substring(0, 16);
 }
 

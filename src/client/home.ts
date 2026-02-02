@@ -20,9 +20,6 @@ interface RepoInfo {
   defaultBranch: string;
 }
 
-// Well-known branch names to prioritize in dropdowns
-const WELL_KNOWN_BRANCHES = ['main', 'master', 'stable', 'dev', 'development'];
-
 document.addEventListener('DOMContentLoaded', () => {
   const repoUrlInput = $('repo-url') as HTMLInputElement | null;
   const addProjectBtn = $('add-project-btn') as HTMLButtonElement | null;
@@ -293,31 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function curateBranches(allBranches: string[], defaultBranch: string): string[] {
-    const seen = new Set<string>();
-    const result: string[] = [];
-
-    // 1. Default branch first
-    if (allBranches.includes(defaultBranch)) {
-      result.push(defaultBranch);
-      seen.add(defaultBranch);
-    }
-
-    // 2. Well-known branches
-    for (const name of WELL_KNOWN_BRANCHES) {
-      if (!seen.has(name) && allBranches.includes(name)) {
-        result.push(name);
-        seen.add(name);
-      }
-    }
-
-    // 3. Remaining branches alphabetically
-    const remaining = allBranches.filter(b => !seen.has(b)).sort();
-    result.push(...remaining);
-
-    return result;
-  }
-
   // ---- Add Other Repositories ----
 
   addReposBtn?.addEventListener('click', () => {
@@ -459,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (loading) hide(loading);
       if (step3) show(step3);
       createBtn.disabled = false;
-      alert(err instanceof Error ? err.message : 'Failed to create project');
+      showError(err instanceof Error ? err.message : 'Failed to create project');
     }
   });
 });

@@ -34,36 +34,44 @@ interface ApiError {
   details?: string;
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+async function apiFetch<T>(path: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
+  const timeout = options.timeout ?? 60000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(path, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try {
-      const body: ApiError = await res.json();
-      msg = body.error || msg;
-    } catch {
-      // ignore parse errors
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const body: ApiError = await res.json();
+        msg = body.error || msg;
+      } catch {
+        // ignore parse errors
+      }
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After');
+        msg = retryAfter
+          ? `Rate limited. Please wait ${retryAfter} seconds and try again.`
+          : 'Rate limited. Please wait a moment and try again.';
+      }
+      throw new Error(msg);
     }
-    if (res.status === 429) {
-      const retryAfter = res.headers.get('Retry-After');
-      msg = retryAfter
-        ? `Rate limited. Please wait ${retryAfter} seconds and try again.`
-        : 'Rate limited. Please wait a moment and try again.';
-    }
-    throw new Error(msg);
+
+    // Handle 204 No Content
+    if (res.status === 204) return undefined as unknown as T;
+
+    return res.json() as Promise<T>;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  // Handle 204 No Content
-  if (res.status === 204) return undefined as unknown as T;
-
-  return res.json() as Promise<T>;
 }
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -155,6 +163,112 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
+// ---------- Error Helpers ----------
+
+function showInlineError(container: HTMLElement, message: string): void {
+  clearInlineError(container);
+  const notice = document.createElement('div');
+  notice.className = 'notice notice-error inline-error';
+  notice.textContent = message;
+  container.prepend(notice);
+}
+
+function clearInlineError(container: HTMLElement): void {
+  container.querySelector('.inline-error')?.remove();
+}
+
+function showError(message: string): void {
+  const main = document.querySelector('main');
+  if (main) showInlineError(main, message);
+}
+
+// ---------- Format Helpers ----------
+
+function formatStatus(status: string): string {
+  const map: Record<string, string> = {
+    'false_positive': 'False Positive',
+    'wont_fix': "Won't Fix",
+    'in_progress': 'In Progress',
+    'resolved': 'Resolved',
+    'accepted': 'Accepted',
+    'open': 'Open',
+  };
+  return map[status] || status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ---------- Shared: curateBranches ----------
+
+// Well-known branch names to prioritize in dropdowns
+const WELL_KNOWN_BRANCHES = ['main', 'master', 'stable', 'dev', 'development'];
+
+function curateBranches(allBranches: string[], defaultBranch: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  // 1. Default branch first
+  if (allBranches.includes(defaultBranch)) {
+    result.push(defaultBranch);
+    seen.add(defaultBranch);
+  }
+
+  // 2. Well-known branches
+  for (const name of WELL_KNOWN_BRANCHES) {
+    if (!seen.has(name) && allBranches.includes(name)) {
+      result.push(name);
+      seen.add(name);
+    }
+  }
+
+  // 3. Remaining branches alphabetically
+  const remaining = allBranches.filter(b => !seen.has(b)).sort();
+  result.push(...remaining);
+
+  return result;
+}
+
+// ---------- Shared: attachAddAsProjectHandlers ----------
+
+function attachAddAsProjectHandlers(selector: string): void {
+  document.querySelectorAll<HTMLButtonElement>(selector).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const depId = btn.dataset.depId!;
+      const depName = btn.dataset.name!;
+      const sourceUrl = btn.dataset.url || '';
+
+      if (!sourceUrl) {
+        showError('No source repository URL available for this dependency.');
+        return;
+      }
+
+      const match = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+      if (!match) {
+        showError('Source URL is not a recognized GitHub repository.');
+        return;
+      }
+
+      const githubOrg = match[1];
+      const repoName = match[2].replace(/\.git$/, '');
+
+      if (!confirm(`Add "${depName}" (https://github.com/${githubOrg}/${repoName}) as a new CodeWatch project?`)) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
+      try {
+        const newProject = await apiPost<{ projectId: string }>('/api/projects', {
+          githubOrg,
+          repoNames: [repoName],
+        });
+        await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: newProject.projectId });
+        btn.outerHTML = `<a href="/project.html?projectId=${newProject.projectId}" class="btn btn-sm btn-secondary">View Project</a>`;
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Add as Project';
+        showError(err instanceof Error ? err.message : 'Failed to add as project');
+      }
+    });
+  });
+}
+
 // ---------- Auth Status ----------
 
 interface AuthUser {
@@ -220,10 +334,28 @@ function waitForAuth(): Promise<void> {
   });
 }
 
+// ---------- Mobile Navigation ----------
+
+function initNav(): void {
+  const hamburger = document.getElementById('hamburger-btn');
+  const navLinks = document.querySelector('.nav-links');
+  if (!hamburger || !navLinks) return;
+  hamburger.classList.remove('hidden');
+  hamburger.addEventListener('click', () => {
+    navLinks.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!hamburger.contains(e.target as Node) && !navLinks.contains(e.target as Node)) {
+      navLinks.classList.remove('open');
+    }
+  });
+}
+
 // ---------- Init ----------
 
 document.addEventListener('DOMContentLoaded', async () => {
   initThemeToggle();
+  initNav();
   await checkAuth();
   renderAuthStatus();
 });

@@ -16,6 +16,7 @@
     <header>
         <nav>
             <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
+            <button class="hamburger hidden" id="hamburger-btn" aria-label="Menu">&#9776;</button>
             <div class="nav-right">
                 <div class="nav-links">
                     <a href="/">New Audit</a>
@@ -48,6 +49,10 @@
                 <button class="btn btn-sm btn-secondary" id="incremental-btn">Run Incremental</button>
                 <button class="btn btn-sm btn-secondary" id="fresh-btn">Run Fresh Audit</button>
             </div>
+            <p class="text-sm text-muted mt-1">
+                <strong>Incremental</strong>: Only analyzes files changed since the last audit.
+                <strong>Fresh</strong>: Analyzes all files from scratch.
+            </p>
         </div>
 
         <!-- Clone errors notice -->
@@ -77,17 +82,17 @@
         <!-- Audit Level Cards (costs on cards; disabled until component analysis complete) -->
         <h3 class="mb-1">Audit Levels</h3>
         <div class="estimate-grid" id="estimate-grid">
-            <div class="estimate-card disabled" data-level="full">
+            <div class="estimate-card disabled" data-level="full" role="button" tabindex="0">
                 <h3>Full Audit</h3>
                 <p class="description">Every line of code analyzed exhaustively. All OWASP Top 10, CWE Top 25, and language-specific vulnerabilities checked.</p>
                 <div class="price" id="price-full">--</div>
             </div>
-            <div class="estimate-card disabled" data-level="thorough">
+            <div class="estimate-card disabled" data-level="thorough" role="button" tabindex="0">
                 <h3>Thorough Audit</h3>
                 <p class="description">Focused on security-critical paths: auth, crypto, input validation, database queries, and API endpoints (~33% of codebase).</p>
                 <div class="price" id="price-thorough">--</div>
             </div>
-            <div class="estimate-card disabled" data-level="opportunistic">
+            <div class="estimate-card disabled" data-level="opportunistic" role="button" tabindex="0">
                 <h3>Opportunistic Audit</h3>
                 <p class="description">Claude identifies and deeply analyzes the most critical ~10% of the codebase. Targeted, high-signal assessment.</p>
                 <div class="price" id="price-opportunistic">--</div>

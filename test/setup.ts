@@ -5,6 +5,12 @@ import * as http from 'http';
 import { createApp } from '../src/server/app';
 import { initPool, runMigrations } from '../src/server/db';
 
+export const TEST_MODEL_PRICING = {
+  opus: { modelId: 'claude-opus-4-5-20251101', displayName: 'Claude Opus 4.5', inputCostPerMtok: 5.00, outputCostPerMtok: 25.00 },
+  sonnet: { modelId: 'claude-sonnet-4-5-20250929', displayName: 'Claude Sonnet 4.5', inputCostPerMtok: 3.00, outputCostPerMtok: 15.00 },
+  haiku: { modelId: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku 4.5', inputCostPerMtok: 1.00, outputCostPerMtok: 5.00 },
+};
+
 const BASE_DB_URL = process.env.DATABASE_URL || 'postgresql://localhost:5432/postgres';
 
 export interface TestContext {

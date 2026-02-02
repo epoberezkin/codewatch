@@ -16,6 +16,7 @@
     <header>
         <nav>
             <a href="/" class="logo"><img src="/logos/shield-v2-mark.svg" alt="" class="logo-icon">CodeWatch</a>
+            <button class="hamburger hidden" id="hamburger-btn" aria-label="Menu">&#9776;</button>
             <div class="nav-right">
                 <div class="nav-links">
                     <a href="/">New Audit</a>
@@ -40,6 +41,7 @@
             <div class="flex-between mt-2" id="report-controls">
                 <div class="severity-summary" id="severity-summary"></div>
                 <div class="hidden" id="owner-controls">
+                    <a class="btn btn-sm btn-secondary" id="back-to-project-link" href="#">Back to Project</a>
                     <button class="btn btn-sm btn-secondary" id="publish-btn">Make Public</button>
                     <button class="btn btn-sm btn-secondary hidden" id="unpublish-btn">Make Private</button>
                     <a class="btn btn-sm btn-accent" id="new-audit-link" href="#">New Audit</a>

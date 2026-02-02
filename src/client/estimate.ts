@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let estimateData: EstimateData | null = null;
   let useIncremental = false;
   let baseAuditId: string | null = null;
-  let selectedComponentIds: string[] = [];
+  const selectedComponentIds = new Set<string>();
   let components: ComponentItem[] = [];
   let projectData: ProjectData | null = null;
 
@@ -169,7 +169,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const comps = await apiFetch<ComponentItem[]>(`/api/projects/${projectId}/components`);
       if (comps.length > 0) {
         components = comps;
-        selectedComponentIds = comps.map(c => c.id);
+        selectedComponentIds.clear();
+        comps.forEach(c => selectedComponentIds.add(c.id));
         showStep2(comps);
       }
     } catch {
@@ -202,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     tbody.innerHTML = comps.map(c => `
       <tr>
-        <td><input type="checkbox" class="component-checkbox" data-id="${c.id}" checked></td>
+        <td><input type="checkbox" class="component-checkbox" data-id="${c.id}" ${selectedComponentIds.has(c.id) ? 'checked' : ''}></td>
         <td><strong>${escapeHtml(c.name)}</strong><br><small class="text-muted">${escapeHtml(c.description.substring(0, 80))}</small></td>
         <td>${escapeHtml(c.repoName)}</td>
         <td>${escapeHtml(c.role || '--')}</td>
@@ -234,16 +235,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function onComponentSelectionChange() {
     const checkboxes = document.querySelectorAll<HTMLInputElement>('.component-checkbox');
-    selectedComponentIds = [];
+    selectedComponentIds.clear();
     checkboxes.forEach(cb => {
-      if (cb.checked) selectedComponentIds.push(cb.dataset.id!);
+      if (cb.checked) selectedComponentIds.add(cb.dataset.id!);
     });
     await updateScopedEstimate();
     updateStartButton();
   }
 
   async function updateScopedEstimate() {
-    if (selectedComponentIds.length === 0) {
+    if (selectedComponentIds.size === 0) {
       setText('scoped-estimate-label', 'No components selected');
       // Clear mode card prices
       setHtml('price-full', '--');
@@ -255,12 +256,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const scoped = await apiPost<EstimateData>('/api/estimate/components', {
         projectId,
-        componentIds: selectedComponentIds,
+        componentIds: Array.from(selectedComponentIds),
       });
       renderEstimateCards(scoped);
       estimateData = scoped;
       setText('scoped-estimate-label',
-        `${selectedComponentIds.length} of ${components.length} components selected ` +
+        `${selectedComponentIds.size} of ${components.length} components selected ` +
         `(${formatNumber(scoped.totalFiles)} files, ${formatNumber(scoped.totalTokens)} tokens)`);
     } catch {
       setText('scoped-estimate-label', 'Failed to update estimate');
@@ -284,9 +285,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     return key.startsWith('sk-ant-');
   }
 
+  // Real-time API key format validation hint (Issue #63)
   apiKeyInput?.addEventListener('input', () => {
     updateStartButton();
     updateAnalyzeButton();
+    const value = apiKeyInput.value.trim();
+    const hintEl = $('api-key-hint');
+    if (value.length > 0 && !value.startsWith('sk-ant-')) {
+      if (!hintEl) {
+        const hint = document.createElement('div');
+        hint.id = 'api-key-hint';
+        hint.className = 'text-sm text-muted';
+        hint.textContent = 'Anthropic API keys start with "sk-ant-"';
+        apiKeyInput.parentElement?.appendChild(hint);
+      }
+    } else if (hintEl) {
+      hintEl.remove();
+    }
   });
 
   // ---- Component Analysis ----
@@ -313,8 +328,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         { apiKey }
       );
 
-      // Poll for completion
+      // Poll for completion with max retries (Issue #9)
+      const MAX_POLL_RETRIES = 150; // ~5 min at 2s intervals
+      let pollCount = 0;
+
       const poll = async () => {
+        pollCount++;
+        if (pollCount > MAX_POLL_RETRIES) {
+          hide('component-analyzing');
+          show('component-not-analyzed');
+          showError('Component analysis timed out after 5 minutes. Please try again.');
+          updateAnalyzeButton();
+          return;
+        }
+
         const status = await apiFetch<AnalysisStatus>(
           `/api/projects/${projectId}/component-analysis/${analysisId}`
         );
@@ -326,13 +353,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           const comps = await apiFetch<ComponentItem[]>(`/api/projects/${projectId}/components`);
           if (comps.length > 0) {
             components = comps;
-            selectedComponentIds = comps.map(c => c.id);
+            selectedComponentIds.clear();
+            comps.forEach(c => selectedComponentIds.add(c.id));
             showStep2(comps);
           }
         } else if (status.status === 'failed') {
           hide('component-analyzing');
           show('component-not-analyzed');
-          alert('Component analysis failed: ' + (status.errorMessage || 'Unknown error'));
+          showError('Component analysis failed: ' + (status.errorMessage || 'Unknown error'));
           updateAnalyzeButton();
         } else {
           setTimeout(poll, 2000);
@@ -343,7 +371,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       hide('component-analyzing');
       show('component-not-analyzed');
       updateAnalyzeButton();
-      alert(err instanceof Error ? err.message : 'Failed to start analysis');
+      showError(err instanceof Error ? err.message : 'Failed to start analysis');
     }
   });
 
@@ -351,14 +379,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const cards = document.querySelectorAll<HTMLElement>('.estimate-card');
   cards.forEach(card => {
-    card.addEventListener('click', () => {
+    // Keyboard accessibility (Issue #24)
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-pressed', 'false');
+
+    const activateCard = () => {
       if (card.classList.contains('disabled')) return;
-      cards.forEach(c => c.classList.remove('selected'));
+      cards.forEach(c => {
+        c.classList.remove('selected');
+        c.setAttribute('aria-pressed', 'false');
+      });
       card.classList.add('selected');
+      card.setAttribute('aria-pressed', 'true');
       selectedLevel = card.dataset.level || null;
       // Show step 3 when a level is selected
       show('step-3');
       updateStartButton();
+    };
+
+    card.addEventListener('click', activateCard);
+    card.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        activateCard();
+      }
     });
   });
 
@@ -375,7 +420,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       updatePrecisionLabel(precise);
       estimateData = precise;
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to get precise estimate');
+      showError(err instanceof Error ? err.message : 'Failed to get precise estimate');
     } finally {
       preciseBtn.disabled = false;
       preciseBtn.textContent = 'Get Precise Estimate';
@@ -391,7 +436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hasKey = keyValue.length > 0;
     const validKey = hasKey && isValidApiKeyFormat(keyValue);
     const hasLevel = !!selectedLevel;
-    const hasComponents = selectedComponentIds.length > 0;
+    const hasComponents = selectedComponentIds.size > 0;
 
     // Show/hide key format error
     if (hasKey && !validKey) {
@@ -412,8 +457,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       const est = estimateData?.estimates[selectedLevel as keyof EstimateData['estimates']];
       const prefix = useIncremental ? 'Start incremental ' : 'Start ';
-      const compLabel = selectedComponentIds.length < components.length
-        ? ` (${selectedComponentIds.length} components)` : '';
+      const compLabel = selectedComponentIds.size < components.length
+        ? ` (${selectedComponentIds.size} components)` : '';
       btn.textContent = `${prefix}${selectedLevel} audit${compLabel}${est ? ` (~${formatUSD(est.costUsd)})` : ''}`;
     }
   }
@@ -433,15 +478,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (useIncremental && baseAuditId) {
         body.baseAuditId = baseAuditId;
       }
-      if (selectedComponentIds.length > 0 && selectedComponentIds.length < components.length) {
-        body.componentIds = selectedComponentIds;
+      if (selectedComponentIds.size > 0 && selectedComponentIds.size < components.length) {
+        body.componentIds = Array.from(selectedComponentIds);
       }
       const result = await apiPost<{ auditId: string }>('/api/audit/start', body);
       window.location.href = `/audit.html?auditId=${result.auditId}`;
     } catch (err) {
       startBtn.disabled = false;
       updateStartButton();
-      alert(err instanceof Error ? err.message : 'Failed to start audit');
+      showError(err instanceof Error ? err.message : 'Failed to start audit');
     }
   });
 
@@ -449,6 +494,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const incrementalBtn = $('incremental-btn') as HTMLButtonElement | null;
   const freshBtn = $('fresh-btn') as HTMLButtonElement | null;
+
+  // Tooltip/help text for audit modes (Issue #64)
+  const modeHelpEl = $('mode-help');
+  if (!modeHelpEl && incrementalBtn?.parentElement) {
+    const helpText = document.createElement('p');
+    helpText.id = 'mode-help';
+    helpText.className = 'text-sm text-muted mt-1';
+    helpText.textContent = 'Incremental: only re-analyzes files changed since the last audit, saving time and cost. Fresh: performs a full analysis of all files from scratch.';
+    incrementalBtn.parentElement.appendChild(helpText);
+  }
 
   incrementalBtn?.addEventListener('click', () => {
     useIncremental = true;
@@ -475,27 +530,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const branchEditorRepos = $('branch-editor-repos');
   const applyBranchesBtn = $('apply-branches-btn') as HTMLButtonElement | null;
   const cancelBranchesBtn = $('cancel-branches-btn') as HTMLButtonElement | null;
-
-  // Well-known branch names to prioritize
-  const WELL_KNOWN = ['main', 'master', 'stable', 'dev', 'development'];
-
-  function curateBranches(allBranches: string[], defaultBranch: string): string[] {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    if (allBranches.includes(defaultBranch)) {
-      result.push(defaultBranch);
-      seen.add(defaultBranch);
-    }
-    for (const name of WELL_KNOWN) {
-      if (!seen.has(name) && allBranches.includes(name)) {
-        result.push(name);
-        seen.add(name);
-      }
-    }
-    const remaining = allBranches.filter(b => !seen.has(b)).sort();
-    result.push(...remaining);
-    return result;
-  }
 
   changeBranchesBtn?.addEventListener('click', async () => {
     if (!branchEditor || !branchEditorRepos || !projectData) return;
@@ -540,6 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
       }).join('');
     } catch (err) {
+      // Hide spinner before showing error (Issue #25)
       branchEditorRepos.innerHTML = `<div class="notice notice-error">Failed to load branches: ${escapeHtml(err instanceof Error ? err.message : 'Unknown error')}</div>`;
     }
   });
@@ -585,7 +620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       hide(branchEditor);
       if (changeBranchesBtn) changeBranchesBtn.disabled = false;
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update branches');
+      showError(err instanceof Error ? err.message : 'Failed to update branches');
     } finally {
       applyBranchesBtn.disabled = false;
       applyBranchesBtn.textContent = 'Apply';

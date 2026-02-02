@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const categoryFilter = $('category-filter') as HTMLSelectElement | null;
   const severityFilter = $('severity-filter') as HTMLSelectElement | null;
   const mineFilter = $('mine-filter') as HTMLInputElement | null;
+  const mineLabel = $('mine-filter-label');
 
   let filtersPopulated = false;
 
@@ -56,7 +57,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   categoryFilter?.addEventListener('change', loadProjects);
   severityFilter?.addEventListener('change', loadProjects);
-  mineFilter?.addEventListener('change', loadProjects);
+
+  // "My Projects" filter with visual indicator (Issue #62)
+  mineFilter?.addEventListener('change', () => {
+    if (mineLabel) {
+      mineLabel.classList.toggle('filter-active', mineFilter.checked);
+    }
+    loadProjects();
+  });
 
   async function loadProjects() {
     const search = (searchInput?.value || '').trim();

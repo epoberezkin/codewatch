@@ -1,0 +1,42 @@
+services:
+  db:
+    image: docker.io/postgres:18
+    environment:
+      POSTGRES_USER: codewatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codewatch}
+      POSTGRES_DB: codewatch
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - ./db:/var/lib/postgresql
+      # The container should use the user and group IDs from the host. When we set the owner of /logs to the user "postgres" in the host (via run.sh), the ID of the container's user "postgres" will match.
+      # From https://stackoverflow.com/questions/23544282/what-is-the-best-way-to-manage-permissions-for-docker-shared-volumes#45640469
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codewatch -d codewatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://codewatch:${POSTGRES_PASSWORD:-codewatch}@db:5432/codewatch
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-http://localhost:3000/auth/github/callback}
+      ANTHROPIC_SERVICE_KEY: ${ANTHROPIC_SERVICE_KEY:-}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+      REPOS_DIR: /app/repos
+      PORT: 3000
+    volumes:
+      - ./repos:/app/repos
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "node dist/server/migrate.js && node dist/server/index.js"

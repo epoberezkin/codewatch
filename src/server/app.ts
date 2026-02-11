@@ -1,3 +1,4 @@
+// Spec: spec/architecture.md#express-app
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -6,6 +7,7 @@ import { gateMiddleware, gateHandler } from './middleware/gate';
 import authRoutes from './routes/auth';
 import apiRoutes from './routes/api';
 
+// Spec: spec/architecture.md#createApp
 export function createApp() {
   const app = express();
 

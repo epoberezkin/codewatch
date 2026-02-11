@@ -1,3 +1,4 @@
+// Spec: spec/services/planning.md
 import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -83,6 +84,7 @@ export const SECURITY_GREP_PATTERNS: Array<{ category: string; pattern: RegExp }
 
 // ---------- Step 1: Local Security Greps ----------
 
+// Spec: spec/services/planning.md#runSecurityGreps
 export function runSecurityGreps(
   files: ScannedFile[],
   repoData: Array<{ name: string; localPath: string }>,
@@ -148,6 +150,7 @@ export function runSecurityGreps(
 
 // ---------- Step 2: Claude Planning Call ----------
 
+// Spec: spec/services/planning.md#runPlanningCall
 export async function runPlanningCall(
   apiKey: string,
   files: ScannedFile[],
@@ -205,6 +208,7 @@ export async function runPlanningCall(
 
 // ---------- Step 3: Token-Budget File Selection ----------
 
+// Spec: spec/services/planning.md#selectFilesByBudget
 export function selectFilesByBudget(
   rankedFiles: RankedFile[],
   allFiles: ScannedFile[],
@@ -257,6 +261,7 @@ export function selectFilesByBudget(
 
 // ---------- Combined Planning Phase ----------
 
+// Spec: spec/services/planning.md#runPlanningPhase
 export async function runPlanningPhase(
   pool: Pool,
   auditId: string,

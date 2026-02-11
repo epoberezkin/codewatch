@@ -1,3 +1,4 @@
+// Spec: spec/auth.md
 import { Router, Request, Response } from 'express';
 import * as crypto from 'crypto';
 import { getPool } from '../db';
@@ -13,6 +14,7 @@ const router = Router();
 
 // ---------- State signing (for returnTo parameter) ----------
 
+// Spec: spec/auth.md#signState
 function signState(payload: string): string {
   const hmac = crypto.createHmac('sha256', config.cookieSecret).update(payload).digest('hex');
   // base64url-encode: payload.hmac
@@ -20,6 +22,7 @@ function signState(payload: string): string {
   return `${encoded}.${hmac}`;
 }
 
+// Spec: spec/auth.md#verifyState
 function verifyState(state: string): string | null {
   const dotIdx = state.indexOf('.');
   if (dotIdx === -1) return null;
@@ -168,6 +171,7 @@ export default router;
 
 // ---------- Middleware: require auth ----------
 
+// Spec: spec/auth.md#requireAuth
 export async function requireAuth(req: Request, res: Response, next: Function) {
   try {
     const sessionId = req.cookies?.session;

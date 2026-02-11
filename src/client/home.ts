@@ -1,3 +1,4 @@
+// Spec: spec/client/home.md
 // ============================================================
 // CodeWatch - Landing Page (index.html)
 // Repo URL input → entity info → repo/branch config → create project
@@ -40,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cache of loaded branches per repo name
   let branchCache: Map<string, string[]> = new Map();
 
-  // Parse GitHub URL to extract owner + repo
+  // Spec: spec/client/home.md#parseGitHubUrl
   function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
     try {
       const u = new URL(url);
@@ -124,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Entity Card ----
 
+  // Spec: spec/client/home.md#renderEntityCard
   function renderEntityCard(entity: EntityInfo) {
     const avatar = $('entity-avatar') as HTMLImageElement | null;
     if (avatar) {
@@ -155,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Selected Repos ----
 
+  // Spec: spec/client/home.md#renderSelectedRepos
   function renderSelectedRepos() {
     const list = $('selected-repos');
     if (!list) return;
@@ -205,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Branch Dropdown ----
 
+  // Spec: spec/client/home.md#openBranchDropdown
   async function openBranchDropdown(repoName: string, trigger: HTMLButtonElement) {
     const container = trigger.parentElement;
     if (!container) return;
@@ -283,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Spec: spec/client/home.md#closeBranchDropdown
   function closeBranchDropdown(container: HTMLElement, repoName: string) {
     const select = container.querySelector('select');
     const trigger = container.querySelector('.branch-trigger') as HTMLButtonElement;
@@ -325,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Spec: spec/client/home.md#renderAllReposList
   function renderAllReposList() {
     const list = $('all-repos-list');
     if (!list) return;
@@ -394,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Step 3: Auth + Create ----
 
+  // Spec: spec/client/home.md#updateStep3
   async function updateStep3() {
     await waitForAuth();
     const hasSelection = selectedRepos.size > 0;

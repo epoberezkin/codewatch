@@ -1,3 +1,4 @@
+// Spec: spec/client/audit.md
 // ============================================================
 // CodeWatch - Audit Progress Page (audit.html)
 // Polls audit status, shows per-file progress
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let consecutiveErrors = 0;
   const MAX_CONSECUTIVE_ERRORS = 5;
 
+  // Spec: spec/client/audit.md#poll
   async function poll() {
     try {
       const data = await apiFetch<AuditStatus>(`/api/audit/${auditId}`);
@@ -65,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Spec: spec/client/audit.md#renderStatus
   function renderStatus(data: AuditStatus) {
     // Status badge
     const statusMap: Record<string, string> = {
@@ -153,6 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Spec: spec/client/audit.md#renderFileList
   function renderFileList(files: AuditStatus['progressDetail']) {
     const list = $('file-list');
     if (!list) return;

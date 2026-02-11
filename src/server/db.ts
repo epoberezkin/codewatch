@@ -1,14 +1,17 @@
+// Spec: spec/database.md
 import { Pool, PoolConfig } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 
 let pool: Pool;
 
+// Spec: spec/database.md#initPool
 export function initPool(connectionString: string): Pool {
   pool = new Pool({ connectionString });
   return pool;
 }
 
+// Spec: spec/database.md#getPool
 export function getPool(): Pool {
   if (!pool) {
     throw new Error('Database pool not initialized. Call initPool() first.');
@@ -16,6 +19,7 @@ export function getPool(): Pool {
   return pool;
 }
 
+// Spec: spec/database.md#runMigrations
 export async function runMigrations(pool: Pool): Promise<void> {
   // Create migrations tracking table
   await pool.query(`
@@ -64,6 +68,7 @@ async function runMigrationsFromDir(pool: Pool, dir: string, files: string[]): P
   }
 }
 
+// Spec: spec/database.md#closePool
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end();

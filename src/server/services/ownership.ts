@@ -1,3 +1,4 @@
+// Spec: spec/services/ownership.md
 import { Pool } from 'pg';
 import { checkGitHubOwnership, type OwnershipCheck } from './github';
 
@@ -13,6 +14,7 @@ export interface OwnershipResult {
  * Checks the ownership_cache table first (15-min TTL).
  * On cache miss, calls GitHub API and caches the result.
  */
+// Spec: spec/services/ownership.md#resolveOwnership
 export async function resolveOwnership(
   pool: Pool,
   userId: string,
@@ -70,6 +72,7 @@ export async function resolveOwnership(
  * Invalidate all cached ownership entries for a user.
  * Called on re-authentication to force fresh GitHub API lookups.
  */
+// Spec: spec/services/ownership.md#invalidateOwnershipCache
 export async function invalidateOwnershipCache(pool: Pool, userId: string): Promise<void> {
   await pool.query(
     'DELETE FROM ownership_cache WHERE user_id = $1',

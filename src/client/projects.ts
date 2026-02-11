@@ -1,3 +1,4 @@
+// Spec: spec/client/projects.md
 // ============================================================
 // CodeWatch - Projects Browse Page (projects.html)
 // Public browse + My Projects filter
@@ -66,6 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadProjects();
   });
 
+  // Spec: spec/client/projects.md#loadProjects
   async function loadProjects() {
     const search = (searchInput?.value || '').trim();
     const category = categoryFilter?.value || 'all';
@@ -113,6 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/projects.md#populateFilters
   function populateFilters(filters: { categories: string[]; severities: string[] }) {
     if (categoryFilter) {
       const current = categoryFilter.value;
@@ -138,6 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/projects.md#renderProjectCard
   function renderProjectCard(p: BrowseProject, isMineMode: boolean): string {
     const sev = p.latestSeverity;
     const auditCount = isMineMode ? (p.auditCount || 0) : (p.publicAuditCount || 0);

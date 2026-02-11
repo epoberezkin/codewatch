@@ -1,6 +1,8 @@
+// Spec: spec/database.md#migrations
 import { config } from './config';
 import { initPool, runMigrations, closePool } from './db';
 
+// Spec: spec/database.md#migrations
 async function main() {
   const pool = initPool(config.databaseUrl);
   try {

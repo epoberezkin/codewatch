@@ -1,7 +1,9 @@
+// Spec: spec/architecture.md
 import { config } from './config';
 import { initPool, runMigrations } from './db';
 import { createApp } from './app';
 
+// Spec: spec/architecture.md#startup
 async function main() {
   const pool = initPool(config.databaseUrl);
   await runMigrations(pool);

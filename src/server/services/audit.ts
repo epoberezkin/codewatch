@@ -1,3 +1,4 @@
+// Spec: spec/services/audit.md
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
 import { callClaude, parseJsonResponse } from './claude';
@@ -59,6 +60,7 @@ const MAX_BATCH_TOKENS = 150000;
 
 // ---------- Main Orchestrator ----------
 
+// Spec: spec/services/audit.md#runAudit
 export async function runAudit(pool: Pool, options: AuditOptions): Promise<void> {
   const { auditId, projectId, level, apiKey } = options;
   let actualCostUsd = 0;
@@ -688,6 +690,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
 
 // ---------- Classification ----------
 
+// Spec: spec/services/audit.md#classifyProject
 async function classifyProject(
   pool: Pool,
   projectId: string,

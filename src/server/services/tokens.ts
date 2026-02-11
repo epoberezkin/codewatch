@@ -1,3 +1,4 @@
+// Spec: spec/services/tokens.md
 import { Pool } from 'pg';
 import { ScannedFile } from './git';
 
@@ -45,12 +46,14 @@ export const BUDGET_PERCENTAGES: Record<string, number> = {
 
 // ---------- Rough Token Count ----------
 
+// Spec: spec/services/tokens.md#roughTokenCount
 export function roughTokenCount(files: ScannedFile[]): number {
   return files.reduce((sum, f) => sum + f.roughTokens, 0);
 }
 
 // ---------- Cost Estimation ----------
 
+// Spec: spec/services/tokens.md#estimateCosts
 export async function estimateCosts(
   pool: Pool,
   files: ScannedFile[],
@@ -90,6 +93,7 @@ export async function estimateCosts(
 /**
  * Compute cost estimates from a known precise total token count.
  */
+// Spec: spec/services/tokens.md#estimateCostsFromTokenCount
 export async function estimateCostsFromTokenCount(
   pool: Pool,
   totalFiles: number,
@@ -148,6 +152,7 @@ function calculateLevelCost(
  * Compute cost estimates scoped to selected components.
  * Uses pre-computed estimated_tokens from the components table.
  */
+// Spec: spec/services/tokens.md#estimateCostsForComponents
 export async function estimateCostsForComponents(
   pool: Pool,
   componentIds: string[],

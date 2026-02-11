@@ -1,3 +1,4 @@
+// Spec: spec/api.md
 import { Router, Request, Response } from 'express';
 import { getPool } from '../db';
 import { requireAuth } from './auth';
@@ -14,6 +15,7 @@ import type { ScannedFile } from '../services/git';
 
 const router = Router();
 
+// Spec: spec/api.md#escapeILike
 // Escape special ILIKE characters in user-provided search terms
 function escapeILike(input: string): string {
   return input.replace(/[%_\\]/g, ch => '\\' + ch);
@@ -28,6 +30,7 @@ interface SessionInfo {
   hasOrgScope: boolean;
 }
 
+// Spec: spec/api.md#getSessionInfo
 async function getSessionInfo(pool: any, sessionId: string | undefined): Promise<SessionInfo | null> {
   if (!sessionId) return null;
   const { rows } = await pool.query(
@@ -49,6 +52,7 @@ async function getSessionInfo(pool: any, sessionId: string | undefined): Promise
 // Helper: resolve access tier for three-tier access control on audit reports/findings
 type AccessTier = 'owner' | 'requester' | 'public';
 
+// Spec: spec/api.md#resolveAccessTier
 function resolveAccessTier(audit: any, requesterId: string | null, isOwner: boolean): AccessTier {
   const now = new Date();
   const publishableAfter = audit.publishable_after ? new Date(audit.publishable_after) : null;
@@ -61,6 +65,7 @@ function resolveAccessTier(audit: any, requesterId: string | null, isOwner: bool
   return 'public';
 }
 
+// Spec: spec/api.md#getRedactedSeverities
 function getRedactedSeverities(tier: AccessTier): Set<string> {
   if (tier === 'owner') return new Set();
   if (tier === 'requester') return new Set();

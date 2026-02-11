@@ -1,3 +1,4 @@
+// Spec: spec/client/project.md
 // ============================================================
 // CodeWatch - Project Dashboard Page (project.html)
 // Project metadata, repos, audit history timeline, security posture
@@ -89,6 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Spec: spec/client/project.md#renderProject
   function renderProject(project: ProjectDetail) {
     hide('project-loading');
     show('project-content');
@@ -186,6 +188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHtml('repos-list', reposHtml);
   }
 
+  // Spec: spec/client/project.md#renderComponents
   function renderComponents(components: ProjectDetail['components']) {
     if (components.length === 0) return;
     show('components-section');
@@ -208,6 +211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     `).join('');
   }
 
+  // Spec: spec/client/project.md#renderDependencies
   function renderDependencies(dependencies: ProjectDetail['dependencies']) {
     if (dependencies.length === 0) return;
     show('dependencies-section');
@@ -242,6 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     attachAddAsProjectHandlers('.add-as-project-btn');
   }
 
+  // Spec: spec/client/project.md#renderAudits
   function renderAudits(audits: ProjectDetail['audits']) {
     const timeline = $('audit-timeline');
     const noAudits = $('no-audits');
@@ -300,6 +305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/project.md#renderDeleteButton
   function renderDeleteButton(project: ProjectDetail) {
     const deleteBtn = $('delete-project-btn');
     if (!deleteBtn) return;

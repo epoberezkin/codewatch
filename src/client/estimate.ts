@@ -1,3 +1,4 @@
+// Spec: spec/client/estimate.md
 // ============================================================
 // CodeWatch - Cost Estimation Page (estimate.html)
 // Step-based flow: Stats → Component Analysis → Mode Selection → Start
@@ -136,6 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Rendering ----
 
+  // Spec: spec/client/estimate.md#renderProjectHeader
   function renderProjectHeader(project: ProjectData) {
     hide('header-loading');
     show('header-content');
@@ -148,6 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setHtml('project-meta', metaHtml);
   }
 
+  // Spec: spec/client/estimate.md#renderProjectStats
   function renderProjectStats(data: EstimateData) {
     setText('stat-files', `${formatNumber(data.totalFiles)} files`);
     setText('stat-tokens', `${formatNumber(data.totalTokens)} tokens`);
@@ -162,6 +165,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/estimate.md#updatePrecisionLabel
   function updatePrecisionLabel(data: EstimateData) {
     setText('estimate-precision', data.isPrecise
       ? 'Precise estimate (token count verified)'
@@ -172,6 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/estimate.md#renderEstimateCards
   function renderEstimateCards(data: EstimateData) {
     const levels = ['full', 'thorough', 'opportunistic'] as const;
     for (const level of levels) {
@@ -180,6 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/estimate.md#updateAnalysisCostHint
   function updateAnalysisCostHint(data: EstimateData) {
     // Component analysis uses ~5% of total project tokens (same as OVERHEAD_MULTIPLIER in tokens.ts)
     const analysisTokens = data.totalTokens * 0.05;
@@ -191,6 +197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Component Loading ----
 
+  // Spec: spec/client/estimate.md#loadExistingComponents
   async function loadExistingComponents() {
     try {
       const comps = await apiFetch<ComponentItem[]>(`/api/projects/${projectId}/components`);
@@ -205,6 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/estimate.md#showStep2
   function showStep2(comps: ComponentItem[]) {
     hide('analyze-section');
     renderComponentTable(comps);
@@ -216,6 +224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateScopedEstimate();
   }
 
+  // Spec: spec/client/estimate.md#enableCards
   function enableCards() {
     document.querySelectorAll<HTMLElement>('.estimate-card').forEach(card => {
       card.classList.remove('disabled');
@@ -224,6 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (hint) hint.style.display = 'none';
   }
 
+  // Spec: spec/client/estimate.md#renderComponentTable
   function renderComponentTable(comps: ComponentItem[]) {
     const tbody = $('component-table-body');
     if (!tbody) return;
@@ -260,6 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/estimate.md#onComponentSelectionChange
   async function onComponentSelectionChange() {
     const checkboxes = document.querySelectorAll<HTMLInputElement>('.component-checkbox');
     selectedComponentIds.clear();
@@ -270,6 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateStartButton();
   }
 
+  // Spec: spec/client/estimate.md#updateScopedEstimate
   async function updateScopedEstimate() {
     if (selectedComponentIds.size === 0) {
       setText('scoped-estimate-label', 'No components selected');
@@ -310,6 +322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const apiKeyInput = $('api-key') as HTMLInputElement | null;
 
+  // Spec: spec/client/estimate.md#isValidApiKeyFormat
   function isValidApiKeyFormat(key: string): boolean {
     return key.startsWith('sk-ant-');
   }
@@ -337,6 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const analyzeBtn = $('analyze-components-btn') as HTMLButtonElement | null;
 
+  // Spec: spec/client/estimate.md#updateAnalyzeButton
   function updateAnalyzeButton() {
     if (!analyzeBtn) return;
     const keyValue = apiKeyInput?.value.trim() || '';
@@ -460,6 +474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Start Button (Step 3) ----
 
+  // Spec: spec/client/estimate.md#updateStartButton
   function updateStartButton() {
     const btn = $('start-audit-btn') as HTMLButtonElement | null;
     if (!btn) return;

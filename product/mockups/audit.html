@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Progress - CodeWatch</title>
+    <style>
+/* ============================================================
+   CodeWatch - Full Stylesheet (inlined for self-contained mockup)
+   ============================================================ */
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f0f4f8;
+    --bg-card: #ffffff;
+    --text-primary: #062d56;
+    --text-secondary: #4a6785;
+    --accent: #07b4b9;
+    --accent-hover: #069a9e;
+    --btn-primary: #02C0FF;
+    --btn-primary-hover: #00a8e0;
+    --border: #d0dbe6;
+    --severity-critical: #dc2626;
+    --severity-high: #ea580c;
+    --severity-medium: #d97706;
+    --severity-low: #2563eb;
+    --severity-info: #6b7280;
+    --success: #16a34a;
+    --error: #dc2626;
+    --code-bg: #f1f5f9;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+    --font-main: 'Inter', -apple-system, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+    --radius: 8px;
+    --radius-sm: 4px;
+    --max-width: 1100px;
+}
+[data-theme="dark"] {
+    --bg-primary: #0a1628;
+    --bg-secondary: #11305f;
+    --bg-card: #152040;
+    --text-primary: #e2e8f0;
+    --text-secondary: #a9ccf4;
+    --accent: #07b4b9;
+    --accent-hover: #08d4da;
+    --btn-primary: #02C0FF;
+    --btn-primary-hover: #33d0ff;
+    --border: #1e3a5f;
+    --code-bg: #1a2744;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { font-family: var(--font-main); background: var(--bg-primary); color: var(--text-primary); line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; transition: background-color 0.2s, color 0.2s; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+code, pre { font-family: var(--font-mono); }
+nav { display: flex; align-items: center; justify-content: space-between; max-width: var(--max-width); width: 100%; margin: 0 auto; padding: 0.75rem 1.5rem; position: relative; }
+.logo { font-size: 1.25rem; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
+.logo:hover { color: var(--accent-hover); text-decoration: none; }
+header { border-bottom: 1px solid var(--border); background: var(--bg-primary); position: sticky; top: 0; z-index: 100; transition: background-color 0.2s; }
+.nav-right { display: flex; align-items: center; gap: 1rem; }
+.nav-links { display: flex; gap: 0.25rem; }
+.nav-links a { color: var(--text-secondary); padding: 0.375rem 0.75rem; border-radius: var(--radius-sm); font-size: 0.875rem; font-weight: 500; }
+.nav-links a:hover { color: var(--text-primary); background: var(--bg-secondary); text-decoration: none; }
+#theme-toggle { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.125rem; color: var(--text-secondary); }
+#auth-status { font-size: 0.875rem; color: var(--text-secondary); }
+.auth-user { display: flex; align-items: center; gap: 0.5rem; }
+.auth-user img { width: 28px; height: 28px; border-radius: 50%; }
+main { flex: 1; max-width: var(--max-width); width: 100%; margin: 0 auto; padding: 2rem 1.5rem; }
+footer { border-top: 1px solid var(--border); text-align: center; padding: 1.25rem 1.5rem; font-size: 0.8125rem; color: var(--text-secondary); }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow); transition: background-color 0.2s, border-color 0.2s; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.card-header h2, .card-header h3 { font-size: 1.125rem; font-weight: 600; }
+.badge { display: inline-block; padding: 0.125rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 999px; border: 1px solid; }
+.badge-running { color: var(--btn-primary); border-color: var(--btn-primary); }
+.badge-owner { background: rgba(22, 163, 74, 0.12); border-color: var(--success); color: var(--success); }
+.audit-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+.audit-meta { font-size: 0.8125rem; color: var(--text-secondary); display: flex; gap: 1rem; flex-wrap: wrap; }
+.audit-meta span { display: inline-flex; align-items: center; gap: 0.25rem; }
+.progress-section { margin-bottom: 2rem; }
+.progress-label { display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 0.5rem; }
+.progress-bar { width: 100%; height: 8px; background: var(--bg-secondary); border-radius: 999px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease; }
+.file-list { list-style: none; }
+.file-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8125rem; }
+.file-item:last-child { border-bottom: none; }
+.file-status { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.625rem; flex-shrink: 0; }
+.file-status-pending { background: var(--bg-secondary); color: var(--text-secondary); }
+.file-status-running { background: rgba(2, 192, 255, 0.15); color: var(--btn-primary); }
+.file-status-done { background: rgba(22, 163, 74, 0.15); color: var(--success); }
+.file-name { font-family: var(--font-mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-findings { font-size: 0.75rem; color: var(--text-secondary); }
+.hidden { display: none !important; }
+.text-sm { font-size: 0.8125rem; }
+.text-muted { color: var(--text-secondary); }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="#" class="logo">&#x1F6E1; CodeWatch</a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="#">New Audit</a>
+                    <a href="#">Projects</a>
+                </div>
+                <button id="theme-toggle" aria-label="Toggle theme">&#9790;</button>
+                <div id="auth-status">
+                    <span class="auth-user">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Crect width='28' height='28' rx='14' fill='%2307b4b9'/%3E%3Ctext x='14' y='19' text-anchor='middle' fill='white' font-size='14' font-family='sans-serif'%3EE%3C/text%3E%3C/svg%3E" alt="">
+                        expressjs-admin
+                    </span>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Audit Header -->
+        <div class="audit-header">
+            <div>
+                <h1>Audit Progress</h1>
+                <div class="audit-meta">
+                    <span><span class="badge badge-running">Analyzing</span></span>
+                    <span class="badge badge-owner">Owner</span>
+                    <span>Thorough</span>
+                    <span>expressjs &middot; 3 repos</span>
+                    <span>main @ a1b2c3d</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-section">
+            <div class="progress-label">
+                <span>Analyzing code (32 / 54 files)</span>
+                <span>59%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: 59%"></div>
+            </div>
+        </div>
+
+        <!-- File List -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Files</h3>
+                <span class="text-sm text-muted">3 findings so far</span>
+            </div>
+            <ul class="file-list">
+                <!-- Done files -->
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/router/index.js</span>
+                    <span class="file-findings">1 finding</span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/router/route.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/router/layer.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/application.js</span>
+                    <span class="file-findings">1 finding</span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/request.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/response.js</span>
+                    <span class="file-findings">1 finding</span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/utils.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">express/lib/view.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">body-parser/lib/types/json.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-done">&#10003;</div>
+                    <span class="file-name">body-parser/lib/types/urlencoded.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <!-- Running files -->
+                <li class="file-item">
+                    <div class="file-status file-status-running">&#9675;</div>
+                    <span class="file-name">body-parser/lib/types/raw.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-running">&#9675;</div>
+                    <span class="file-name">cors/lib/index.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <!-- Pending files -->
+                <li class="file-item">
+                    <div class="file-status file-status-pending">&middot;</div>
+                    <span class="file-name">cors/lib/utils.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-pending">&middot;</div>
+                    <span class="file-name">express/lib/middleware/init.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-pending">&middot;</div>
+                    <span class="file-name">express/lib/middleware/query.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-pending">&middot;</div>
+                    <span class="file-name">body-parser/lib/types/text.js</span>
+                    <span class="file-findings"></span>
+                </li>
+                <li class="file-item">
+                    <div class="file-status file-status-pending">&middot;</div>
+                    <span class="file-name">express/lib/express.js</span>
+                    <span class="file-findings"></span>
+                </li>
+            </ul>
+        </div>
+    </main>
+
+    <footer>
+        <p>Developed by SimpleX Chat using Claude Code</p>
+    </footer>
+</body>
+</html>

@@ -1,3 +1,4 @@
+// Spec: spec/services/github.md
 import { config } from '../config';
 
 // ---------- Types ----------
@@ -47,6 +48,7 @@ export interface OwnershipCheck {
 
 // ---------- OAuth ----------
 
+// Spec: spec/services/github.md#getOAuthUrl
 export function getOAuthUrl(state?: string): string {
   const params = new URLSearchParams({
     client_id: config.github.clientId,
@@ -59,6 +61,7 @@ export function getOAuthUrl(state?: string): string {
   return `https://github.com/login/oauth/authorize?${params.toString()}`;
 }
 
+// Spec: spec/services/github.md#exchangeCodeForToken
 export async function exchangeCodeForToken(code: string): Promise<{ accessToken: string; scope: string }> {
   const res = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
@@ -82,6 +85,7 @@ export async function exchangeCodeForToken(code: string): Promise<{ accessToken:
 
 // ---------- User Info ----------
 
+// Spec: spec/services/github.md#getAuthenticatedUser
 export async function getAuthenticatedUser(token: string): Promise<GitHubUser> {
   const res = await fetch('https://api.github.com/user', {
     headers: {
@@ -95,6 +99,7 @@ export async function getAuthenticatedUser(token: string): Promise<GitHubUser> {
 
 // ---------- Org Repos ----------
 
+// Spec: spec/services/github.md#listOrgRepos
 export async function listOrgRepos(org: string, token?: string): Promise<GitHubRepo[]> {
   const repos: GitHubRepo[] = [];
   let page = 1;
@@ -128,6 +133,7 @@ export async function listOrgRepos(org: string, token?: string): Promise<GitHubR
   return repos;
 }
 
+// Spec: spec/services/github.md#listUserRepos
 async function listUserRepos(username: string, token?: string): Promise<GitHubRepo[]> {
   const repos: GitHubRepo[] = [];
   let page = 1;
@@ -155,6 +161,7 @@ async function listUserRepos(username: string, token?: string): Promise<GitHubRe
 
 // ---------- Org Membership Role ----------
 
+// Spec: spec/services/github.md#getOrgMembershipRole
 export async function getOrgMembershipRole(
   org: string, token: string,
 ): Promise<{ membership: OrgMembership | null; httpStatus: number }> {
@@ -236,6 +243,7 @@ async function checkOrgRoleViaRepoPermissions(
 
 // ---------- Ownership Verification ----------
 
+// Spec: spec/services/github.md#checkGitHubOwnership
 export async function checkGitHubOwnership(
   githubOrg: string,
   githubUsername: string,
@@ -273,6 +281,7 @@ export async function checkGitHubOwnership(
 
 // ---------- Entity Info ----------
 
+// Spec: spec/services/github.md#getGitHubEntity
 export async function getGitHubEntity(name: string, token?: string): Promise<GitHubEntity> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
@@ -294,6 +303,7 @@ export async function getGitHubEntity(name: string, token?: string): Promise<Git
 
 // ---------- Repo Info ----------
 
+// Spec: spec/services/github.md#getRepoDefaultBranch
 export async function getRepoDefaultBranch(
   owner: string,
   repo: string,
@@ -315,6 +325,7 @@ export async function getRepoDefaultBranch(
 
 // ---------- Repo Branches ----------
 
+// Spec: spec/services/github.md#listRepoBranches
 export async function listRepoBranches(
   owner: string,
   repo: string,
@@ -378,6 +389,7 @@ export async function listRepoBranches(
 
 // ---------- Commit Date (for shallow-since) ----------
 
+// Spec: spec/services/github.md#getCommitDate
 export async function getCommitDate(
   owner: string,
   repo: string,
@@ -400,6 +412,7 @@ export async function getCommitDate(
 
 // ---------- Issue Creation (for owner notification) ----------
 
+// Spec: spec/services/github.md#createIssue
 export async function createIssue(
   token: string,
   owner: string,

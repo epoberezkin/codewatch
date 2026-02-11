@@ -1,3 +1,4 @@
+// Spec: spec/services/componentAnalysis.md
 import Anthropic from '@anthropic-ai/sdk';
 import { Pool } from 'pg';
 import * as fs from 'fs';
@@ -158,6 +159,7 @@ async function createMessageWithRetry(
 
 // ---------- Main Entry ----------
 
+// Spec: spec/services/componentAnalysis.md#runComponentAnalysis
 export async function runComponentAnalysis(
   pool: Pool,
   projectId: string,

@@ -1,3 +1,4 @@
+// Spec: spec/client/report.md
 // ============================================================
 // CodeWatch - Report View Page (report.html)
 // Full owner view, redacted non-owner view, comments, publish
@@ -100,6 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Spec: spec/client/report.md#renderReport
   function renderReport(data: ReportData) {
     // Header
     setText('report-title', `Audit Report: ${data.projectName}`);
@@ -305,6 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/report.md#renderFindings
   function renderFindings(findings: Finding[], isOwner: boolean) {
     if (findings.length === 0) {
       setHtml('findings-list', '<div class="empty-state"><h3>No findings</h3><p>No vulnerabilities were identified.</p></div>');
@@ -374,6 +377,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusFilter?.addEventListener('change', applyFilters);
   }
 
+  // Spec: spec/client/report.md#renderFindingsList
   function renderFindingsList(findings: Finding[]) {
     const list = $('findings-list');
     if (!list) return;
@@ -453,6 +457,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Spec: spec/client/report.md#loadComments
   async function loadComments(auditId: string) {
     try {
       const comments = await apiFetch<Comment[]>(`/api/audit/${auditId}/comments`);

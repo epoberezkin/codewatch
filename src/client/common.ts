@@ -1,3 +1,4 @@
+// Spec: spec/client/common.md
 // ============================================================
 // CodeWatch - Common Client Utilities
 // Theme toggle, fetch helpers, DOM utils, auth status
@@ -5,16 +6,19 @@
 
 // ---------- Theme ----------
 
+// Spec: spec/client/common.md#getTheme
 function getTheme(): 'light' | 'dark' {
   return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
 }
 
+// Spec: spec/client/common.md#applyTheme
 function applyTheme(theme: 'light' | 'dark') {
   document.documentElement.setAttribute('data-theme', theme);
   const btn = document.getElementById('theme-toggle');
   if (btn) btn.textContent = theme === 'dark' ? '\u2600' : '\u263E';
 }
 
+// Spec: spec/client/common.md#initThemeToggle
 function initThemeToggle() {
   applyTheme(getTheme());
   const btn = document.getElementById('theme-toggle');
@@ -34,6 +38,7 @@ interface ApiError {
   details?: string;
 }
 
+// Spec: spec/client/common.md#apiFetch
 async function apiFetch<T>(path: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
   const timeout = options.timeout ?? 60000;
   const controller = new AbortController();
@@ -74,6 +79,7 @@ async function apiFetch<T>(path: string, options: RequestInit & { timeout?: numb
   }
 }
 
+// Spec: spec/client/common.md#apiPost
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, {
     method: 'POST',
@@ -81,6 +87,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+// Spec: spec/client/common.md#apiPut
 async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, {
     method: 'PUT',
@@ -90,44 +97,53 @@ async function apiPut<T>(path: string, body: unknown): Promise<T> {
 
 // ---------- DOM Helpers ----------
 
+// Spec: spec/client/common.md#$
 function $(id: string): HTMLElement | null {
   return document.getElementById(id);
 }
 
+// Spec: spec/client/common.md#show
 function show(el: HTMLElement | string) {
   const node = typeof el === 'string' ? $(el) : el;
   node?.classList.remove('hidden');
 }
 
+// Spec: spec/client/common.md#hide
 function hide(el: HTMLElement | string) {
   const node = typeof el === 'string' ? $(el) : el;
   node?.classList.add('hidden');
 }
 
+// Spec: spec/client/common.md#setText
 function setText(id: string, text: string) {
   const el = $(id);
   if (el) el.textContent = text;
 }
 
+// Spec: spec/client/common.md#setHtml
 function setHtml(id: string, html: string) {
   const el = $(id);
   if (el) el.innerHTML = html;
 }
 
+// Spec: spec/client/common.md#getParam
 function getParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name);
 }
 
+// Spec: spec/client/common.md#formatNumber
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toString();
 }
 
+// Spec: spec/client/common.md#formatUSD
 function formatUSD(n: number): string {
   return '$' + n.toFixed(2);
 }
 
+// Spec: spec/client/common.md#formatDate
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -136,6 +152,7 @@ function formatDate(iso: string): string {
   });
 }
 
+// Spec: spec/client/common.md#formatDateTime
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     year: 'numeric',
@@ -146,6 +163,7 @@ function formatDateTime(iso: string): string {
   });
 }
 
+// Spec: spec/client/common.md#severityClass
 function severityClass(severity: string): string {
   switch (severity) {
     case 'critical': return 'severity-critical';
@@ -157,6 +175,7 @@ function severityClass(severity: string): string {
   }
 }
 
+// Spec: spec/client/common.md#escapeHtml
 function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
@@ -165,6 +184,7 @@ function escapeHtml(text: string): string {
 
 // ---------- Ownership & Access Tier Badges ----------
 
+// Spec: spec/client/common.md#renderOwnershipBadge
 function renderOwnershipBadge(ownership: { isOwner: boolean; role?: string | null; needsReauth?: boolean } | null | undefined): string {
   if (!ownership) return '';
   if (ownership.isOwner) {
@@ -176,6 +196,7 @@ function renderOwnershipBadge(ownership: { isOwner: boolean; role?: string | nul
   return '';
 }
 
+// Spec: spec/client/common.md#renderAccessTierBadge
 function renderAccessTierBadge(tier: 'owner' | 'requester' | 'public'): string {
   if (tier === 'owner') return '<span class="badge badge-completed">full access</span>';
   if (tier === 'requester') return '<span class="badge badge-pending">redacted</span>';
@@ -184,6 +205,7 @@ function renderAccessTierBadge(tier: 'owner' | 'requester' | 'public'): string {
 
 // ---------- Error Helpers ----------
 
+// Spec: spec/client/common.md#showInlineError
 function showInlineError(container: HTMLElement, message: string): void {
   clearInlineError(container);
   const notice = document.createElement('div');
@@ -192,10 +214,12 @@ function showInlineError(container: HTMLElement, message: string): void {
   container.prepend(notice);
 }
 
+// Spec: spec/client/common.md#clearInlineError
 function clearInlineError(container: HTMLElement): void {
   container.querySelector('.inline-error')?.remove();
 }
 
+// Spec: spec/client/common.md#showError
 function showError(message: string): void {
   const main = document.querySelector('main');
   if (main) showInlineError(main, message);
@@ -203,6 +227,7 @@ function showError(message: string): void {
 
 // ---------- Format Helpers ----------
 
+// Spec: spec/client/common.md#formatStatus
 function formatStatus(status: string): string {
   const map: Record<string, string> = {
     'false_positive': 'False Positive',
@@ -217,6 +242,7 @@ function formatStatus(status: string): string {
 
 // ---------- Shared: attachAddAsProjectHandlers ----------
 
+// Spec: spec/client/common.md#attachAddAsProjectHandlers
 function attachAddAsProjectHandlers(selector: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -270,6 +296,7 @@ interface AuthUser {
 let currentUser: AuthUser | null = null;
 let authChecked = false;
 
+// Spec: spec/client/common.md#checkAuth
 async function checkAuth(): Promise<AuthUser | null> {
   try {
     currentUser = await apiFetch<AuthUser>('/auth/me');
@@ -282,6 +309,7 @@ async function checkAuth(): Promise<AuthUser | null> {
   }
 }
 
+// Spec: spec/client/common.md#renderAuthStatus
 function renderAuthStatus() {
   const el = $('auth-status');
   if (!el) return;
@@ -305,6 +333,7 @@ function renderAuthStatus() {
 
 // ---------- Wait for Auth ----------
 
+// Spec: spec/client/common.md#waitForAuth
 function waitForAuth(): Promise<void> {
   return new Promise((resolve) => {
     const check = () => {
@@ -325,6 +354,7 @@ function waitForAuth(): Promise<void> {
 
 // ---------- Mobile Navigation ----------
 
+// Spec: spec/client/common.md#initNav
 function initNav(): void {
   const hamburger = document.getElementById('hamburger-btn');
   const navLinks = document.querySelector('.nav-links');

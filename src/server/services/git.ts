@@ -1,3 +1,4 @@
+// Spec: spec/services/git.md
 import simpleGit, { SimpleGit } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -47,12 +48,14 @@ export interface DiffResult {
 
 // ---------- Clone / Update ----------
 
+// Spec: spec/services/git.md#repoLocalPath
 export function repoLocalPath(repoUrl: string): string {
   // e.g. https://github.com/org/repo → repos/github.com/org/repo
   const url = new URL(repoUrl);
   return path.join(config.reposDir, url.hostname, url.pathname.replace(/^\//, '').replace(/\.git$/, ''));
 }
 
+// Spec: spec/services/git.md#cloneOrUpdate
 export async function cloneOrUpdate(
   repoUrl: string,
   branch?: string,
@@ -127,6 +130,7 @@ async function getDefaultBranch(git: SimpleGit): Promise<string> {
 
 // ---------- File Scanning ----------
 
+// Spec: spec/services/git.md#scanCodeFiles
 export function scanCodeFiles(repoRoot: string): ScannedFile[] {
   const files: ScannedFile[] = [];
   walkDir(repoRoot, repoRoot, files);
@@ -173,6 +177,7 @@ function walkDir(dir: string, root: string, files: ScannedFile[]) {
 
 // ---------- Diff ----------
 
+// Spec: spec/services/git.md#diffBetweenCommits
 export async function diffBetweenCommits(
   repoPath: string,
   baseSha: string,
@@ -217,6 +222,7 @@ export interface ReadFileResult {
   error?: string;
 }
 
+// Spec: spec/services/git.md#readFileContent
 export function readFileContent(repoPath: string, relativePath: string): ReadFileResult {
   try {
     const fullPath = path.resolve(path.join(repoPath, relativePath));
@@ -235,6 +241,7 @@ export function readFileContent(repoPath: string, relativePath: string): ReadFil
 
 // ---------- Get HEAD SHA ----------
 
+// Spec: spec/services/git.md#getHeadSha
 export async function getHeadSha(repoPath: string): Promise<string> {
   const git = simpleGit(repoPath);
   const log = await git.log({ maxCount: 1 });
@@ -242,6 +249,7 @@ export async function getHeadSha(repoPath: string): Promise<string> {
   return log.latest.hash;
 }
 
+// Spec: spec/services/git.md#getDefaultBranchName
 export async function getDefaultBranchName(repoPath: string): Promise<string> {
   const git = simpleGit(repoPath);
   return getDefaultBranch(git);

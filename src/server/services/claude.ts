@@ -1,3 +1,4 @@
+// Spec: spec/services/claude.md
 import Anthropic from '@anthropic-ai/sdk';
 
 // ---------- Types ----------
@@ -39,6 +40,7 @@ function getRetryAfterSeconds(err: unknown): number {
  * Key is never stored — only held in-memory for the duration of the audit.
  * Retries on 429 rate limit and 5xx server errors with Retry-After support.
  */
+// Spec: spec/services/claude.md#callClaude
 export async function callClaude(
   apiKey: string,
   systemPrompt: string,
@@ -101,6 +103,7 @@ export async function callClaude(
  * Count tokens for a message using Anthropic's free count_tokens endpoint.
  * Uses the service key (ANTHROPIC_SERVICE_KEY), not the user's key.
  */
+// Spec: spec/services/claude.md#countTokens
 export async function countTokens(
   apiKey: string,
   systemPrompt: string,
@@ -145,6 +148,7 @@ export async function countTokens(
  * Parse JSON from Claude's response.
  * Handles: raw JSON, markdown code blocks, and text preamble before JSON.
  */
+// Spec: spec/services/claude.md#parseJsonResponse
 export function parseJsonResponse<T>(content: string): T {
   const text = content.trim();
 

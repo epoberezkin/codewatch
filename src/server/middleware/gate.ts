@@ -1,3 +1,4 @@
+// Spec: spec/auth.md#gate
 import { Request, Response, NextFunction } from 'express';
 import * as crypto from 'crypto';
 import { config } from '../config';
@@ -5,6 +6,7 @@ import { config } from '../config';
 const GATE_COOKIE = 'gate';
 const GATE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 
+// Spec: spec/auth.md#hmacGateValue
 function hmacGateValue(password: string): string {
   return crypto
     .createHmac('sha256', config.cookieSecret)
@@ -12,6 +14,7 @@ function hmacGateValue(password: string): string {
     .digest('hex');
 }
 
+// Spec: spec/auth.md#gateMiddleware
 export function gateMiddleware(req: Request, res: Response, next: NextFunction): void {
   // Gate disabled when no password configured
   if (!config.gatePassword) {
@@ -36,6 +39,7 @@ export function gateMiddleware(req: Request, res: Response, next: NextFunction):
   res.redirect(302, '/gate.html');
 }
 
+// Spec: spec/auth.md#gateHandler
 export function gateHandler(req: Request, res: Response): void {
   if (!config.gatePassword) {
     res.redirect('/');

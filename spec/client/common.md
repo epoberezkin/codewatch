@@ -1,12 +1,12 @@
 # common.ts -- Shared Client Utilities
 
-**Source**: [`common.ts`](../../src/client/common.ts) (L1-L351)
+**Source**: [`common.ts`](../../src/client/common.ts#L1-L381)
 
 All exports are global functions/variables (no ES module exports). Loaded by every HTML page.
 
 ---
 
-## Theme Management (L6-L28)
+## [Theme Management](../../src/client/common.ts#L7-L32)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -18,9 +18,9 @@ All exports are global functions/variables (no ES module exports). Loaded by eve
 
 ---
 
-## Fetch Helpers (L30-L89)
+## [Fetch Helpers](../../src/client/common.ts#L34-L97)
 
-### Interface: `ApiError` (L32-L35)
+### [Interface: `ApiError`](../../src/client/common.ts#L36-L39)
 ```ts
 interface ApiError { error: string; details?: string }
 ```
@@ -39,7 +39,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## DOM Helpers (L91-L115)
+## [DOM Helpers](../../src/client/common.ts#L98-L127)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -51,7 +51,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## URL / Formatting Helpers (L117-L216)
+## [URL / Formatting Helpers](../../src/client/common.ts#L129-L241)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -64,7 +64,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## Styling Helpers (L149-L164)
+## [Styling Helpers](../../src/client/common.ts#L166-L183)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -73,7 +73,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## Badge Rendering (L166-L183)
+## [Badge Rendering](../../src/client/common.ts#L185-L204)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -82,17 +82,17 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## Error Handling (L185-L202)
+## [Error Handling](../../src/client/common.ts#L206-L227)
 
 | Function | Signature | Description |
 |---|---|---|
-| `showInlineError` | `(container: HTMLElement, message: string) => void` | Prepends a `.notice-error` div to container (clears previous inline error first) |
+| `showInlineError` | `(container: HTMLElement, message: string) => void` | Prepends a div with classes `notice notice-error inline-error` to container (clears previous `.inline-error` first) |
 | `clearInlineError` | `(container: HTMLElement) => void` | Removes `.inline-error` element from container |
 | `showError` | `(message: string) => void` | Calls `showInlineError` on `<main>` element |
 
 ---
 
-## Shared Handler: attachAddAsProjectHandlers (L218-L259)
+## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L243-L285)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -106,14 +106,14 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## Auth State (L261-L323)
+## [Auth State](../../src/client/common.ts#L287-L353)
 
-### Interface: `AuthUser` (L263-L268)
+### [Interface: `AuthUser`](../../src/client/common.ts#L289-L294)
 ```ts
 interface AuthUser { id: string; username: string; avatarUrl?: string; githubType: string }
 ```
 
-### Variables (L270-L271)
+### [Variables](../../src/client/common.ts#L296-L297)
 | Variable | Type | Description |
 |---|---|---|
 | `currentUser` | `AuthUser \| null` | Populated by `checkAuth()`. Readable by all page modules. |
@@ -135,7 +135,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## Navigation (L326-L341)
+## [Navigation](../../src/client/common.ts#L355-L371)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -146,7 +146,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## Init Sequence (L343-L350)
+## [Init Sequence](../../src/client/common.ts#L373-L381)
 
 ```ts
 document.addEventListener('DOMContentLoaded', async () => {

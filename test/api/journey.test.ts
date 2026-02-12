@@ -1,3 +1,4 @@
+// Product: product/flows/audit-lifecycle.md
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { TestContext, startTestServer, teardownTestServer, truncateAllTables } from '../setup';
 import { createTestSession, authenticatedFetch } from '../helpers';

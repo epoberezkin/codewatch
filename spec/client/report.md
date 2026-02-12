@@ -1,6 +1,6 @@
 # report.ts -- Report Page Module
 
-**Source**: [`report.ts`](../../src/client/report.ts) (L1-L541)
+**Source**: [`report.ts`](../../src/client/report.ts#L1-L547)
 **HTML**: `public/report.html`
 
 ---
@@ -16,7 +16,7 @@ Also includes: finding filters, comments section, dependency "Add as Project", c
 
 ---
 
-## Interfaces (L6-L80)
+## [Interfaces](../../src/client/report.ts#L7-L81)
 
 ```ts
 interface Finding {
@@ -47,7 +47,7 @@ interface Comment {
 
 ---
 
-## State Variables (L92)
+## State Variables (L93)
 
 | Variable | Type | Description |
 |---|---|---|
@@ -57,44 +57,44 @@ interface Comment {
 
 ## Functions
 
-### renderReport (L103-L306)
+### [renderReport](../../src/client/report.ts#L105-L308)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderReport` | `(data: ReportData) => void` | Master render function. Calls all sub-renderers. |
 
 Rendering sections (in order):
-1. **Header** (L105-L111): Title, meta (project link, date, level, incremental flag, commits)
-2. **Back to Project link** (L114-L129): Creates link if not in HTML
-3. **Access tier badge** (L132)
-4. **Severity summary** (L135-L140): Ordered severity count badges
-5. **Owner controls** (L143-L152): Shows `#owner-controls`, sets new audit link. Toggles publish/unpublish visibility based on `isPublic`.
-6. **Requester controls** (L155-L157): Shows notify owner button (only if requester, not owner, not already notified)
-7. **Notification status** (L160-L166): Shows if owner was notified, with dates
-8. **Executive summary** (L169-L186): Summary text or "No summary" fallback
-9. **Security posture** (L173-L174): Posture paragraph
-10. **Responsible disclosure** (L177-L183): Key-value disclosure entries
-11. **Classification** (L189-L197): Category badge + project description
-12. **Threat model** (L200-L238): Involved parties table (party/can/cannot) with source badge, or plain text threat model
-13. **Component breakdown** (L241-L254): Table with name, role, findings count, tokens
-14. **Dependencies** (L257-L286): Grouped by ecosystem. Linked projects show "View Project" link; unlinked show "Add as Project" button (authenticated) or "source" link.
-15. **Redacted notice** (L289-L295)
-16. **Findings** (L298): Delegates to `renderFindings`
-17. **Comments** (L301-L305): Loads comments, shows form for participants
+1. **Header** (L107-L113): Title, meta (project link, date, level, incremental flag, commits)
+2. **Back to Project link** (L116-L131): Creates link if not in HTML
+3. **Access tier badge** (L134)
+4. **Severity summary** (L137-L142): Ordered severity count badges
+5. **Owner controls** (L145-L154): Shows `#owner-controls`, sets new audit link. Toggles publish/unpublish visibility based on `isPublic`.
+6. **Requester controls** (L157-L159): Shows notify owner button (only if requester, not owner, not already notified)
+7. **Notification status** (L162-L168): Shows if owner was notified, with dates
+8. **Executive summary** (L171-L188): Summary text or "No summary" fallback
+9. **Security posture** (L175-L176): Posture paragraph
+10. **Responsible disclosure** (L179-L185): Key-value disclosure entries
+11. **Classification** (L191-L199): Category badge + project description
+12. **Threat model** (L202-L240): Involved parties table (party/can/cannot) with source badge, or plain text threat model
+13. **Component breakdown** (L243-L256): Table with name, role, findings count, tokens
+14. **Dependencies** (L259-L288): Grouped by ecosystem. Linked projects show "View Project" link; unlinked show "Add as Project" button (authenticated) or "source" link.
+15. **Redacted notice** (L291-L297)
+16. **Findings** (L300): Delegates to `renderFindings`
+17. **Comments** (L303-L307): Loads comments, shows form for participants
 
-### renderFindings (L308-L375)
+### [renderFindings](../../src/client/report.ts#L311-L378)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderFindings` | `(findings: Finding[], isOwner: boolean) => void` | Shows empty state or sets up filters + renders list |
 
-**Filter logic** (L317-L374):
+**Filter logic** (L321-L377):
 - `#severity-filter` dropdown: populated with only severities present in findings
 - `#status-filter` dropdown: populated with only statuses present in findings
 - `applyFilters()` closure: filters findings array and re-renders
 - `updateFilterCount()` closure: shows/hides `#filter-count-badge` with active filter count
 
-### renderFindingsList (L377-L453)
+### [renderFindingsList](../../src/client/report.ts#L381-L458)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -106,12 +106,12 @@ Rendering sections (in order):
 - Body: description, exploitation, recommendation, code snippet
 - Actions (owner only): status select (open, fixed, false_positive, accepted, wont_fix)
 
-**Finding status change handler** (L424-L453):
+**Finding status change handler** (L428-L457):
 - `PATCH /api/findings/{findingId}/status` with `{ status }`
 - On success: updates badge class+text, updates in-memory `reportData.findings`
 - On error: shows error, reverts select to previous status from `reportData`
 
-### loadComments (L456-L478)
+### [loadComments](../../src/client/report.ts#L461-L483)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -123,14 +123,14 @@ Rendering sections (in order):
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `#severity-filter` | change | L373 | Calls `applyFilters` |
-| `#status-filter` | change | L374 | Calls `applyFilters` |
-| `.finding-status-select` (each) | change | L425-L452 | PATCHes finding status (owner only) |
-| `#submit-comment-btn` | click | L482-L498 | Posts comment, clears input, reloads comments |
-| `#publish-btn` | click | L503-L510 | Confirms, posts publish, reloads page |
-| `#unpublish-btn` | click | L514-L522 | Confirms, posts unpublish, reloads page |
-| `#notify-owner-btn` | click | L527-L540 | Confirms (explains GitHub issue + disclosure timer), posts notify, shows result, reloads |
-| `.add-dep-project-btn` (each) | click | L285 | Via `attachAddAsProjectHandlers` from common.ts |
+| `#severity-filter` | change | L376 | Calls `applyFilters` |
+| `#status-filter` | change | L377 | Calls `applyFilters` |
+| `.finding-status-select` (each) | change | L429-L456 | PATCHes finding status (owner only) |
+| `#submit-comment-btn` | click | L487-L504 | Posts comment, clears input, reloads comments |
+| `#publish-btn` | click | L508-L516 | Confirms, posts publish, reloads page |
+| `#unpublish-btn` | click | L520-L528 | Confirms, posts unpublish, reloads page |
+| `#notify-owner-btn` | click | L532-L545 | Confirms (explains GitHub issue + disclosure timer), posts notify, shows result, reloads |
+| `.add-dep-project-btn` (each) | click | L287 | Via `attachAddAsProjectHandlers` from common.ts |
 
 ---
 
@@ -138,13 +138,13 @@ Rendering sections (in order):
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/audit/{auditId}/report` | init | L95 |
-| PATCH | `/api/findings/{findingId}/status` | finding select change | L431-L433 |
-| GET | `/api/audit/{auditId}/comments` | loadComments | L458 |
-| POST | `/api/audit/{auditId}/comments` | submitCommentBtn click | L493 |
-| POST | `/api/audit/{auditId}/publish` | publishBtn click | L506 |
-| POST | `/api/audit/{auditId}/unpublish` | unpublishBtn click | L518 |
-| POST | `/api/audit/{auditId}/notify-owner` | notifyBtn click | L530 |
+| GET | `/api/audit/{auditId}/report` | init | L96 |
+| PATCH | `/api/findings/{findingId}/status` | finding select change | L435-L437 |
+| GET | `/api/audit/{auditId}/comments` | loadComments | L463 |
+| POST | `/api/audit/{auditId}/comments` | submitCommentBtn click | L498 |
+| POST | `/api/audit/{auditId}/publish` | publishBtn click | L511 |
+| POST | `/api/audit/{auditId}/unpublish` | unpublishBtn click | L523 |
+| POST | `/api/audit/{auditId}/notify-owner` | notifyBtn click | L535 |
 | POST | `/api/projects` | attachAddAsProjectHandlers (common.ts) | -- |
 | POST | `/api/dependencies/{depId}/link` | attachAddAsProjectHandlers (common.ts) | -- |
 
@@ -215,6 +215,6 @@ Findings can be filtered by severity and status, but not searched by text (title
 
 ## [GAP] Notify Owner Success Uses showError
 
-L532-L534: Success messages after notifying owner are displayed via `showError()`, which renders as an error-styled notice.
+L537-L539: Success messages after notifying owner are displayed via `showError()`, which renders as an error-styled notice.
 
 ## [REC] Disable comment submit button during POST. Use a success-styled notice for notify-owner confirmation. Consider adding text search for findings.

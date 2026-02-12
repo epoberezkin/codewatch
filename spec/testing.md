@@ -183,40 +183,40 @@ Service tests (`test/services/`) differ from API tests:
 
 | File | Lines | Tests |
 |------|------:|-------|
-| `smoke.test.ts` | 61 | Health check (`GET /`, `GET /api/health`), DB table existence, model_pricing seed data |
-| `auth.test.ts` | 290 | OAuth flow (`GET /auth/github`, callback), session creation, `GET /auth/me`, `POST /auth/logout`, org scope handling |
-| `projects.test.ts` | 262 | `GET /api/github/orgs/:org/repos`, `POST /api/projects` (create), `GET /api/projects/:id` |
-| `project-pages.test.ts` | 625 | `GET /api/projects/browse` (pagination, filtering, search), `GET /api/projects/:id` (detail view), ownership badges |
-| `audit.test.ts` | 1121 | `POST /api/audit/start`, full audit flow, `GET /api/audit/:id`, report generation, findings, comments, publish, `GET /api/reports`, project audits list, incremental audits, `PATCH /api/findings/:id/status`, API key security |
-| `estimate.test.ts` | 194 | `POST /api/estimate` -- cost estimation with Claude mock |
-| `gate.test.ts` | 113 | Development gate (password protection via config) |
-| `journey.test.ts` | 311 | End-to-end: create project -> classify -> audit -> publish -> browse -> verify |
-| `ownership.test.ts` | 567 | Ownership resolution, caching, ownership-gated endpoints, `isOwner`/`isRequester` flags, report access tiers |
-| `delete.test.ts` | 330 | `DELETE /api/audit/:id`, `DELETE /api/projects/:id`, ownership checks |
-| `disclosure.test.ts` | 519 | `POST /api/audit/:id/notify-owner`, three-tier report access (owner/requester/public), response fields |
-| `unpublish.test.ts` | 153 | Unpublish audit endpoint, ownership checks |
-| `schema.test.ts` | 149 | `project_dependencies` self-reference check constraint, `audit_commits` NOT NULL constraints |
-| `component-selection.test.ts` | 682 | `POST /api/estimate/components`, component-scoped audits, supply chain, report component breakdown and dependencies |
+| `smoke.test.ts` | 62 | Health check (`GET /`, `GET /api/health`), DB table existence, model_pricing seed data |
+| `auth.test.ts` | 291 | OAuth flow (`GET /auth/github`, callback), session creation, `GET /auth/me`, `POST /auth/logout`, org scope handling |
+| `projects.test.ts` | 263 | `GET /api/github/orgs/:org/repos`, `POST /api/projects` (create), `GET /api/projects/:id` |
+| `project-pages.test.ts` | 626 | `GET /api/projects/browse` (pagination, filtering, search), `GET /api/projects/:id` (detail view), ownership badges |
+| `audit.test.ts` | 1122 | `POST /api/audit/start`, full audit flow, `GET /api/audit/:id`, report generation, findings, comments, publish, `GET /api/reports`, project audits list, incremental audits, `PATCH /api/findings/:id/status`, API key security |
+| `estimate.test.ts` | 195 | `POST /api/estimate` -- cost estimation with Claude mock |
+| `gate.test.ts` | 114 | Development gate (password protection via config) |
+| `journey.test.ts` | 312 | End-to-end: create project -> classify -> audit -> publish -> browse -> verify |
+| `ownership.test.ts` | 568 | Ownership resolution, caching, ownership-gated endpoints, `isOwner`/`isRequester` flags, report access tiers |
+| `delete.test.ts` | 331 | `DELETE /api/audit/:id`, `DELETE /api/projects/:id`, ownership checks |
+| `disclosure.test.ts` | 520 | `POST /api/audit/:id/notify-owner`, three-tier report access (owner/requester/public), response fields |
+| `unpublish.test.ts` | 154 | Unpublish audit endpoint, ownership checks |
+| `schema.test.ts` | 150 | `project_dependencies` self-reference check constraint, `audit_commits` NOT NULL constraints |
+| `component-selection.test.ts` | 683 | `POST /api/estimate/components`, component-scoped audits, supply chain, report component breakdown and dependencies |
 
 ### Service Tests (`test/services/`)
 
 | File | Lines | Tests |
 |------|------:|-------|
-| `git.test.ts` | 74 | `scanCodeFiles` on fixture directory |
-| `git-shallow.test.ts` | 213 | Shallow clones (`cloneOrUpdate`), clone progress tracking, `getCommitDate` |
-| `github-ownership.test.ts` | 265 | `getOrgMembershipRole` (200/404/403/network error), `checkGitHubOwnership` (org admin/member/non-member, personal repos) |
-| `planning.test.ts` | 565 | Local security greps, Claude planning call, token-budget file selection, combined planning phase (`runPlanningPhase`) |
-| `componentAnalysis.test.ts` | 1167 | Agentic component analysis (multi-turn Claude tool use), component analysis API endpoints |
+| `git.test.ts` | 75 | `scanCodeFiles` on fixture directory |
+| `git-shallow.test.ts` | 214 | Shallow clones (`cloneOrUpdate`), clone progress tracking, `getCommitDate` |
+| `github-ownership.test.ts` | 266 | `getOrgMembershipRole` (200/404/403/network error), `checkGitHubOwnership` (org admin/member/non-member, personal repos) |
+| `planning.test.ts` | 566 | Local security greps, Claude planning call, token-budget file selection, combined planning phase (`runPlanningPhase`) |
+| `componentAnalysis.test.ts` | 1168 | Agentic component analysis (multi-turn Claude tool use), component analysis API endpoints |
 
 ### Infrastructure Files
 
 | File | Lines | Purpose |
 |------|------:|---------|
-| `setup.ts` | 91 | Database lifecycle, server lifecycle, table truncation |
+| `setup.ts` | 90 | Database lifecycle, server lifecycle, table truncation |
 | `helpers.ts` | 71 | Test user/session creation, authenticated fetch |
 | `mocks/github.ts` | 75 | Shared GitHub mock state and fixtures |
 
-**Total**: 7,897 lines across 22 files (19 test + 3 infrastructure).
+**Total**: 7,916 lines across 22 files (19 test + 3 infrastructure).
 
 ---
 
@@ -271,3 +271,30 @@ coverage: {
 | `test/mocks/github.ts` | L14-28: Setter functions; L30-35: `resetMocks`; L37-40: Getter functions; L43-48: `testGitHubUser` fixture; L50-75: `testOrgRepos` fixture |
 | `test/api/smoke.test.ts` | L4-61: Canonical minimal test pattern |
 | `test/api/auth.test.ts` | L7-9: `vi.hoisted` pattern; L12-32: Inline `vi.mock` for GitHub; L34-37: Ownership mock; L39-53: Standard lifecycle hooks |
+
+---
+
+## Coverage by Concept
+
+| Product Concept | Test Files | Coverage Level |
+|----------------|------------|---------------|
+| Project Creation | projects.test.ts, journey.test.ts | Good |
+| Ownership Verification | ownership.test.ts, github-ownership.test.ts | Good |
+| Cost Estimation | estimate.test.ts | Good |
+| Component Analysis | componentAnalysis.test.ts, component-selection.test.ts | Good |
+| Audit Planning | planning.test.ts | Good |
+| Audit Execution | audit.test.ts, journey.test.ts | Good |
+| Incremental Audits | audit.test.ts | Good |
+| Classification | audit.test.ts, journey.test.ts | Partial |
+| Report Access Control | disclosure.test.ts, ownership.test.ts | Good |
+| Report Redaction | disclosure.test.ts | Good |
+| Responsible Disclosure | disclosure.test.ts | Good |
+| Finding Management | audit.test.ts | Good |
+| Comments | audit.test.ts | Partial |
+| Component Selection | component-selection.test.ts | Good |
+| Supply Chain | component-selection.test.ts | Good |
+| Authentication | auth.test.ts | Good |
+| Pre-launch Gate | gate.test.ts | Good |
+| Branch Selection | project-pages.test.ts | None |
+| Project Browsing | project-pages.test.ts | Good |
+| Audit Synthesis | audit.test.ts | Partial |

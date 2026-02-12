@@ -1,3 +1,4 @@
+// Product: product/views/estimate.md
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { TestContext, startTestServer, teardownTestServer, truncateAllTables } from '../setup';
 import { createTestSession, authenticatedFetch } from '../helpers';

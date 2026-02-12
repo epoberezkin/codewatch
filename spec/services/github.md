@@ -8,7 +8,7 @@ Source: [`github.ts`](../../src/server/services/github.ts)
 
 ## Types
 
-### `GitHubUser` (L6-L11)
+### [`GitHubUser`](../../src/server/services/github.ts#L6-L11)
 
 Represents the authenticated user returned by the GitHub `/user` endpoint.
 
@@ -19,7 +19,7 @@ Represents the authenticated user returned by the GitHub `/user` endpoint.
 | `type`      | `string` | `'User'` or `'Organization'`  |
 | `avatar_url`| `string` |                                |
 
-### `GitHubRepo` (L13-L24)
+### [`GitHubRepo`](../../src/server/services/github.ts#L13-L24)
 
 Represents a GitHub repository as returned by list/get endpoints.
 
@@ -36,7 +36,7 @@ Represents a GitHub repository as returned by list/get endpoints.
 | `license`         | `{ spdx_id: string } \| null`  |       |
 | `html_url`        | `string`                        |       |
 
-### `GitHubEntity` (L26-L30)
+### [`GitHubEntity`](../../src/server/services/github.ts#L26-L30)
 
 Normalized representation of a GitHub user or organization. Uses camelCase (`avatarUrl`) unlike the raw API (`avatar_url`).
 
@@ -46,7 +46,7 @@ Normalized representation of a GitHub user or organization. Uses camelCase (`ava
 | `type`     | `'User' \| 'Organization'`   |
 | `avatarUrl`| `string`                      |
 
-### `GitHubBranch` (L32-L34)
+### [`GitHubBranch`](../../src/server/services/github.ts#L32-L34)
 
 Minimal branch representation returned by `listRepoBranches`.
 
@@ -54,7 +54,7 @@ Minimal branch representation returned by `listRepoBranches`.
 |--------|----------|
 | `name` | `string` |
 
-### `OrgMembership` (L38-L41)
+### [`OrgMembership`](../../src/server/services/github.ts#L38-L41)
 
 Organization membership details for the authenticated user.
 
@@ -63,7 +63,7 @@ Organization membership details for the authenticated user.
 | `role`  | `'admin' \| 'member'`      |
 | `state` | `'active' \| 'pending'`    |
 
-### `OwnershipCheck` (L43-L47)
+### [`OwnershipCheck`](../../src/server/services/github.ts#L43-L47)
 
 Result of an ownership verification check.
 
@@ -79,7 +79,7 @@ Result of an ownership verification check.
 
 ### OAuth
 
-#### [`getOAuthUrl()`](../../src/server/services/github.ts) (L52-L62)
+#### [`getOAuthUrl()`](../../src/server/services/github.ts#L52-L62)
 
 ```ts
 function getOAuthUrl(state?: string): string
@@ -93,7 +93,7 @@ Builds a GitHub OAuth authorization URL.
 - **Error handling:** None; pure URL construction.
 - **[REC]** The scope is hardcoded to `read:org`. If additional scopes are needed in the future, this would need parameterization.
 
-#### [`exchangeCodeForToken()`](../../src/server/services/github.ts) (L65-L84)
+#### [`exchangeCodeForToken()`](../../src/server/services/github.ts#L65-L84)
 
 ```ts
 function exchangeCodeForToken(code: string): Promise<{ accessToken: string; scope: string }>
@@ -111,7 +111,7 @@ Exchanges an OAuth authorization code for an access token.
 
 ### User Info
 
-#### [`getAuthenticatedUser()`](../../src/server/services/github.ts) (L89-L98)
+#### [`getAuthenticatedUser()`](../../src/server/services/github.ts#L89-L98)
 
 ```ts
 function getAuthenticatedUser(token: string): Promise<GitHubUser>
@@ -128,7 +128,7 @@ Fetches the profile of the currently authenticated user.
 
 ### Repos
 
-#### [`listOrgRepos()`](../../src/server/services/github.ts) (L103-L134)
+#### [`listOrgRepos()`](../../src/server/services/github.ts#L103-L134)
 
 ```ts
 function listOrgRepos(org: string, token?: string): Promise<GitHubRepo[]>
@@ -141,7 +141,7 @@ Lists all public repositories for an organization, with automatic pagination.
 - **Behavior:** Paginates in batches of 100 until a batch returns fewer than 100 items. On 404 (first page only), falls back to `listUserRepos()` treating the org name as a username.
 - **Error handling:** Throws on non-ok response (except the 404 fallback).
 
-#### [`listUserRepos()`](../../src/server/services/github.ts) (L137-L160)
+#### [`listUserRepos()`](../../src/server/services/github.ts#L137-L160)
 
 ```ts
 // NOT exported
@@ -156,7 +156,7 @@ Lists all public repositories for a user. Called as a fallback from `listOrgRepo
 - **Error handling:** Throws on non-ok response.
 - **Note:** Not exported; internal fallback only.
 
-#### [`getGitHubEntity()`](../../src/server/services/github.ts) (L285-L302)
+#### [`getGitHubEntity()`](../../src/server/services/github.ts#L285-L302)
 
 ```ts
 function getGitHubEntity(name: string, token?: string): Promise<GitHubEntity>
@@ -169,7 +169,7 @@ Looks up a GitHub user or organization by login name and returns a normalized `G
 - **Behavior:** Fetches the raw user/org object and maps `avatar_url` to camelCase `avatarUrl`.
 - **Error handling:** Throws on non-ok response.
 
-#### [`getRepoDefaultBranch()`](../../src/server/services/github.ts) (L307-L324)
+#### [`getRepoDefaultBranch()`](../../src/server/services/github.ts#L307-L324)
 
 ```ts
 function getRepoDefaultBranch(owner: string, repo: string, token?: string): Promise<string>
@@ -183,7 +183,7 @@ Returns the default branch name for a repository.
 - **Error handling:** Throws on non-ok response.
 - **[REC]** Fetches the full repo object to read a single field. Could use a conditional request or share data with callers that already have the repo object.
 
-#### [`listRepoBranches()`](../../src/server/services/github.ts) (L329-L388)
+#### [`listRepoBranches()`](../../src/server/services/github.ts#L329-L388)
 
 ```ts
 function listRepoBranches(owner: string, repo: string, token?: string): Promise<GitHubBranch[]>
@@ -202,7 +202,7 @@ Lists all branches for a repository, sorted by most recent commit date descendin
 
 ### Ownership
 
-#### [`getOrgMembershipRole()`](../../src/server/services/github.ts) (L165-L188)
+#### [`getOrgMembershipRole()`](../../src/server/services/github.ts#L165-L188)
 
 ```ts
 function getOrgMembershipRole(
@@ -217,7 +217,7 @@ Checks the authenticated user's membership role in a given organization.
 - **Behavior:** Returns `{ membership, httpStatus }`. On success, parses `role` and `state`. On failure, returns `null` membership with the HTTP status code (e.g., 403 for third-party app restrictions, 404 for non-member).
 - **Error handling:** Does not throw; returns `null` membership on any non-ok response.
 
-#### [`checkOrgRoleViaRepoPermissions()`](../../src/server/services/github.ts) (L198-L242)
+#### [`checkOrgRoleViaRepoPermissions()`](../../src/server/services/github.ts#L198-L242)
 
 ```ts
 // NOT exported
@@ -236,7 +236,7 @@ Fallback ownership check when the membership API returns 403 (org has third-part
 - **Error handling:** Catches all exceptions and returns `null`. Does not throw.
 - **Note:** Not exported; called only from `checkGitHubOwnership`.
 
-#### [`checkGitHubOwnership()`](../../src/server/services/github.ts) (L247-L280)
+#### [`checkGitHubOwnership()`](../../src/server/services/github.ts#L247-L280)
 
 ```ts
 function checkGitHubOwnership(
@@ -262,7 +262,7 @@ Top-level ownership verification. Determines whether the authenticated user is a
 
 ### Issues
 
-#### [`createIssue()`](../../src/server/services/github.ts) (L416-L437)
+#### [`createIssue()`](../../src/server/services/github.ts#L416-L437)
 
 ```ts
 function createIssue(
@@ -281,7 +281,7 @@ Creates a new issue in the specified repository.
 
 ### Commits
 
-#### [`getCommitDate()`](../../src/server/services/github.ts) (L393-L411)
+#### [`getCommitDate()`](../../src/server/services/github.ts#L393-L411)
 
 ```ts
 function getCommitDate(

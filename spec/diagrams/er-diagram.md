@@ -39,7 +39,7 @@ erDiagram
         JSONB involved_parties
         TEXT threat_model
         TEXT threat_model_source
-        UUID classification_audit_id FK
+        UUID classification_audit_id
         UUID component_analysis_id FK
         TIMESTAMPTZ components_analyzed_at
         INTEGER total_files

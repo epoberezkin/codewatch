@@ -1,3 +1,4 @@
+// Product: product/flows/responsible-disclosure.md
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { TestContext, startTestServer, teardownTestServer, truncateAllTables } from '../setup';
 import { createTestUser, createTestSession, authenticatedFetch } from '../helpers';

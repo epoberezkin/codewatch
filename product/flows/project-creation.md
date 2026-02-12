@@ -71,7 +71,7 @@ Server-side processing:
 
 ### Step 8: Redirect to Estimate Page
 
-On success, the frontend redirects to the estimate page (`/estimate/:projectId`).
+On success, the frontend redirects to the estimate page (`/estimate.html?projectId=<id>`).
 
 ## Deduplication Logic
 
@@ -129,12 +129,14 @@ flowchart TD
     H -->|Yes| K[POST /api/projects]
     K --> L{Duplicate?}
     L -->|Yes| M[409: Return existing projectId]
-    M --> N[Redirect to /estimate/:projectId]
+    M --> N[Redirect to /estimate.html?projectId=id]
     L -->|No| O[Create project + upsert repos]
     O --> P[Resolve ownership]
     P --> Q[Return projectId]
     Q --> N
 ```
+
+**Related spec:** [api.md](../../spec/api.md), [services/github.md](../../spec/services/github.md), [services/ownership.md](../../spec/services/ownership.md), [database.md](../../spec/database.md)
 
 ## Key Files
 

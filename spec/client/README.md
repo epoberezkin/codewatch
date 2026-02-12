@@ -21,7 +21,7 @@
 
 ## Shared Utilities
 
-[`common.ts`](../../src/client/common.ts) (L1-L351) provides:
+[`common.ts`](../../src/client/common.ts#L1-L381) provides:
 - Theme toggle (localStorage-backed dark/light)
 - Fetch helpers with timeout, error parsing, rate-limit handling
 - DOM shorthand (`$`, `show`, `hide`, `setText`, `setHtml`)

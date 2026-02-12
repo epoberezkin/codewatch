@@ -2,7 +2,7 @@
 
 ## Product Vision
 
-CodeWatch is an AI-powered security audit platform for open-source software. It uses Claude Opus 4.5 to perform comprehensive code security reviews with a BYOK (Bring Your Own Key) model, making professional-grade security audits accessible to any OSS project.
+CodeWatch is an AI-powered security audit platform for open-source software. It uses Claude Opus 4.5 (default; other models configurable via `model_pricing` table) to perform comprehensive code security reviews with a BYOK (Bring Your Own Key) model, making professional-grade security audits accessible to any OSS project.
 
 Users bring their own Anthropic API key. CodeWatch handles repository cloning, intelligent file selection, multi-batch analysis, finding attribution, and report synthesis -- all driven by Claude.
 
@@ -107,7 +107,7 @@ flowchart TD
 
 1. **Personal account**: `githubOrg === currentUser.githubUsername` (case-insensitive)
 2. **Org admin**: GitHub API `GET /user/memberships/orgs/:org` returns `role: admin, state: active`
-3. **Repo admin fallback**: If membership API returns 403, check admin permission on the org's most-starred public repo
+3. **Repo admin fallback**: If membership API returns 403, check admin permission on the org's most recently pushed public repo
 4. **Cache**: Results cached for 15 minutes in `ownership_cache` table; invalidated on re-authentication
 
 ## View Index
@@ -132,7 +132,16 @@ flowchart TD
 | Audit Lifecycle | Estimation, planning, batch analysis, synthesis, incremental audits | [audit-lifecycle.md](flows/audit-lifecycle.md) |
 | Responsible Disclosure | Owner notification, time-gated publication, redaction rules | [responsible-disclosure.md](flows/responsible-disclosure.md) |
 
+## Navigation Aids
+
+| Document | Purpose |
+|----------|---------|
+| [concepts.md](concepts.md) | Concept & entity index — maps every feature to its product docs, spec docs, source files, and tests |
+| [glossary.md](glossary.md) | Term definitions — ~40 domain terms with one-line definitions |
+| [rules.md](rules.md) | Business rules & invariants — what MUST be maintained, with enforcement and test references |
+| [gaps.md](gaps.md) | Known gaps and recommendations — collected from all product documents |
+
 ## Cross-References
 
-- **Engineering specification**: [spec/README.md](../spec/README.md) -- database schema, API contracts, server architecture
-- **Known gaps and recommendations**: [gaps.md](gaps.md) -- collected from all product documents
+- **Engineering specification**: [spec/README.md](../spec/README.md) — database schema, API contracts, server architecture
+- **Change impact graph**: [spec/impact.md](../spec/impact.md) — which product behaviors each source file affects

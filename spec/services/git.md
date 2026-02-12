@@ -54,7 +54,7 @@ interface ReadFileResult {
 
 ## Exported Functions
 
-### [`repoLocalPath()`](../../src/server/services/git.ts) (L50-L54)
+### [`repoLocalPath()`](../../src/server/services/git.ts#L52-L56)
 
 ```ts
 function repoLocalPath(repoUrl: string): string
@@ -67,7 +67,7 @@ Converts a repository URL to a local filesystem path under `config.reposDir`. Pa
 
 ---
 
-### [`cloneOrUpdate()`](../../src/server/services/git.ts) (L56-L115)
+### [`cloneOrUpdate()`](../../src/server/services/git.ts#L59-L118)
 
 ```ts
 async function cloneOrUpdate(
@@ -99,7 +99,7 @@ Clones a repository if it does not exist locally, or fetches and pulls updates i
 
 ---
 
-### [`scanCodeFiles()`](../../src/server/services/git.ts) (L130-L134)
+### [`scanCodeFiles()`](../../src/server/services/git.ts#L134-L138)
 
 ```ts
 function scanCodeFiles(repoRoot: string): ScannedFile[]
@@ -107,7 +107,7 @@ function scanCodeFiles(repoRoot: string): ScannedFile[]
 
 Recursively walks a repository directory and returns all code files matching `CODE_EXTENSIONS` or `INFRA_FILES`, subject to `SKIP_DIRS` and `MAX_FILE_SIZE` filters.
 
-Delegates to the private `walkDir()` helper (L136-L172).
+Delegates to the private `walkDir()` helper (L140-L176).
 
 **File inclusion rules (in `walkDir`):**
 - Directories in `SKIP_DIRS` are skipped entirely.
@@ -121,7 +121,7 @@ Delegates to the private `walkDir()` helper (L136-L172).
 
 ---
 
-### [`diffBetweenCommits()`](../../src/server/services/git.ts) (L176-L211)
+### [`diffBetweenCommits()`](../../src/server/services/git.ts#L181-L216)
 
 ```ts
 async function diffBetweenCommits(
@@ -142,7 +142,7 @@ Runs `git diff --name-status baseSha headSha` and parses the output into a `Diff
 
 ---
 
-### [`readFileContent()`](../../src/server/services/git.ts) (L220-L234)
+### [`readFileContent()`](../../src/server/services/git.ts#L226-L240)
 
 ```ts
 function readFileContent(repoPath: string, relativePath: string): ReadFileResult
@@ -160,7 +160,7 @@ Reads a file from within a repository, with path-traversal protection.
 
 ---
 
-### [`getHeadSha()`](../../src/server/services/git.ts) (L238-L243)
+### [`getHeadSha()`](../../src/server/services/git.ts#L245-L250)
 
 ```ts
 async function getHeadSha(repoPath: string): Promise<string>
@@ -173,7 +173,7 @@ Returns the SHA hash of the most recent commit (HEAD) in the given repository.
 
 ---
 
-### [`getDefaultBranchName()`](../../src/server/services/git.ts) (L245-L248)
+### [`getDefaultBranchName()`](../../src/server/services/git.ts#L253-L257)
 
 ```ts
 async function getDefaultBranchName(repoPath: string): Promise<string>
@@ -182,13 +182,13 @@ async function getDefaultBranchName(repoPath: string): Promise<string>
 Returns the default branch name for the repository at `repoPath`. Delegates to the private `getDefaultBranch()` helper.
 
 - **Side effects:** Shell command via `simple-git` (`git remote show origin`).
-- **Error handling:** Falls back to `'main'` if the remote command fails or no HEAD branch line is found (via `getDefaultBranch()` at L117-L126).
+- **Error handling:** Falls back to `'main'` if the remote command fails or no HEAD branch line is found (via `getDefaultBranch()` at L120-L129).
 
 ---
 
 ## Private Functions
 
-### `getDefaultBranch()` (L117-L126)
+### [`getDefaultBranch()`](../../src/server/services/git.ts#L120-L129)
 
 ```ts
 async function getDefaultBranch(git: SimpleGit): Promise<string>
@@ -196,7 +196,7 @@ async function getDefaultBranch(git: SimpleGit): Promise<string>
 
 Runs `git remote show origin`, parses `HEAD branch: <name>` from the output. Falls back to `'main'` on any error.
 
-### `walkDir()` (L136-L172)
+### [`walkDir()`](../../src/server/services/git.ts#L140-L176)
 
 ```ts
 function walkDir(dir: string, root: string, files: ScannedFile[]): void

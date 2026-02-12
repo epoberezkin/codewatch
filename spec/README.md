@@ -26,6 +26,7 @@ This directory contains a complete technical specification of the CodeWatch syst
 | [config.md](config.md) | Configuration, environment variables | `config.ts` |
 | [prompts.md](prompts.md) | Prompt templates | `prompts/*.md` |
 | [testing.md](testing.md) | Test infrastructure | `test/` |
+| [impact.md](impact.md) | Change impact graph — source file → product behavior mapping | all `src/` |
 | [services/audit.md](services/audit.md) | Audit orchestration | `services/audit.ts` |
 | [services/componentAnalysis.md](services/componentAnalysis.md) | Component analysis | `services/componentAnalysis.ts` |
 | [services/github.md](services/github.md) | GitHub API integration | `services/github.ts` |
@@ -57,7 +58,7 @@ Source file to spec document mapping. Every `src/` file is listed with the spec 
 | Source File | Spec Documents |
 |-------------|---------------|
 | `src/server/index.ts` | [architecture.md](architecture.md) |
-| `src/server/app.ts` | [architecture.md](architecture.md), [auth.md](auth.md), [api.md](api.md) |
+| `src/server/app.ts` | [architecture.md](architecture.md), [auth.md](auth.md), [api.md](api.md), [config.md](config.md) |
 | `src/server/config.ts` | [config.md](config.md) |
 | `src/server/db.ts` | [database.md](database.md) |
 | `src/server/migrate.ts` | [database.md](database.md) |
@@ -101,7 +102,7 @@ Source file to spec document mapping. Every `src/` file is listed with the spec 
 
 All spec documents follow these conventions:
 
-- **Source links** use the format: [`functionName()`](../src/server/file.ts) (L45-L89)
+- **Source links** use the format: [`functionName()`](../src/server/file.ts#L45-L89)
 - **`[GAP]`** marks missing functionality, undocumented behavior, or inconsistencies found in source
 - **`[REC]`** marks improvement recommendations
 - **Line numbers** were verified at time of writing against commit `51a1dc8`

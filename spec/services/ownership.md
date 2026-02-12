@@ -6,7 +6,7 @@ Source: [`ownership.ts`](../../src/server/services/ownership.ts)
 
 ## Types
 
-### `OwnershipResult` (L5-L10)
+### [`OwnershipResult`](../../src/server/services/ownership.ts#L5-L10)
 
 ```ts
 interface OwnershipResult {
@@ -26,7 +26,7 @@ interface OwnershipResult {
 
 ## Exported functions
 
-### [`resolveOwnership()`](../../src/server/services/ownership.ts) (L18-L69)
+### [`resolveOwnership()`](../../src/server/services/ownership.ts#L18-L69)
 
 ```ts
 async function resolveOwnership(
@@ -60,7 +60,7 @@ async function resolveOwnership(
 
 ---
 
-### [`invalidateOwnershipCache()`](../../src/server/services/ownership.ts) (L76-L81)
+### [`invalidateOwnershipCache()`](../../src/server/services/ownership.ts#L76-L81)
 
 ```ts
 async function invalidateOwnershipCache(

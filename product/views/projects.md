@@ -119,6 +119,8 @@ While the API call is in flight, the project list area shows a spinner with "Loa
 - **Inbound**: from nav bar "Projects" link (available on all pages), redirect after project deletion.
 - **Outbound**: clicking any project card navigates to `/project.html?projectId=<id>`.
 
+**Related spec:** [client/projects.md](../../spec/client/projects.md), [api.md](../../spec/api.md)
+
 ## Source Files
 
 - `/code/codewatch/public/projects.html` -- HTML template

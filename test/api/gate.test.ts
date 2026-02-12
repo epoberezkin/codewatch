@@ -1,3 +1,4 @@
+// Product: product/views/gate.md
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { TestContext, startTestServer, teardownTestServer, truncateAllTables } from '../setup';
 import { config } from '../../src/server/config';

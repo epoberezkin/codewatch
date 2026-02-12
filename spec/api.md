@@ -8,9 +8,17 @@ Central REST API router for CodeWatch. Handles all server-side endpoints: GitHub
 
 ---
 
+## Health Check
+
+### `GET /api/health`
+
+Defined in [`app.ts`](../src/server/app.ts) (not in `routes/api.ts`). Returns `{ status: 'ok' }`. No authentication required. Positioned after the gate middleware — explicitly bypassed by the gate via path check.
+
+---
+
 ## Helper Functions
 
-### `escapeILike` (L18)
+### `escapeILike` (L20)
 
 Escapes `%`, `_`, and `\` in user-provided strings before use in PostgreSQL `ILIKE` clauses to prevent pattern injection.
 
@@ -18,7 +26,7 @@ Escapes `%`, `_`, and `\` in user-provided strings before use in PostgreSQL `ILI
 function escapeILike(input: string): string
 ```
 
-### `getSessionInfo` (L31)
+### `getSessionInfo` (L34)
 
 Resolves the current viewer's session from a `session` cookie. Joins `sessions` and `users` tables, checks `expires_at > NOW()`. Returns `null` if no cookie or expired/invalid session.
 
@@ -33,7 +41,7 @@ interface SessionInfo {
 async function getSessionInfo(pool, sessionId): Promise<SessionInfo | null>
 ```
 
-### `resolveAccessTier` (L52)
+### `resolveAccessTier` (L56)
 
 Three-tier access control for audit reports/findings.
 
@@ -47,12 +55,12 @@ Logic:
 2. Else if viewer is the audit requester => **`requester`** (partial access).
 3. Else => **`public`** (summary only).
 
-### `getRedactedSeverities` (L64)
+### `getRedactedSeverities` (L69)
 
 Returns the set of severity levels whose finding details should be redacted for a given access tier.
 
 - `owner` => empty set (no redaction)
-- `requester` => empty set (no redaction) [GAP] This contradicts the actual report endpoint logic at L1368 which redacts medium/high/critical for requesters. The helper is defined but never called; the report endpoint uses inline logic instead.
+- `requester` => empty set (no redaction) [GAP] This contradicts the actual report endpoint logic at L1373 which redacts medium/high/critical for requesters. The helper is defined but never called; the report endpoint uses inline logic instead.
 - `public` => `{ critical, high }`
 
 [REC] Either remove `getRedactedSeverities` or refactor the report/findings endpoints to use it, keeping the source of truth in one place.
@@ -61,7 +69,7 @@ Returns the set of severity levels whose finding details should be redacted for 
 
 ## 1. GitHub Integration
 
-### GET /api/github/orgs/:org/repos (L75)
+### GET /api/github/orgs/:org/repos (L80)
 
 Lists repositories for a GitHub organization.
 
@@ -74,7 +82,7 @@ Lists repositories for a GitHub organization.
 | **DB** | Reads `sessions`, `users` (for token) |
 | **External** | `listOrgRepos(org, token)` |
 
-### GET /api/github/entity/:name (L102)
+### GET /api/github/entity/:name (L108)
 
 Fetches GitHub entity info (user or organization) and resolves ownership if session exists.
 
@@ -87,7 +95,7 @@ Fetches GitHub entity info (user or organization) and resolves ownership if sess
 | **DB** | Reads `sessions`, `users`; ownership resolution may read/write `ownership_cache` |
 | **External** | `getGitHubEntity(name, token)`, `resolveOwnership(...)` |
 
-### GET /api/github/repos/:owner/:repo/branches (L136)
+### GET /api/github/repos/:owner/:repo/branches (L141)
 
 Lists branches for a repository. Default branch is placed first in the returned array.
 
@@ -104,7 +112,7 @@ Lists branches for a repository. Default branch is placed first in the returned 
 
 ## 2. Projects
 
-### POST /api/projects (L168)
+### POST /api/projects (L173)
 
 Creates a project with linked repositories.
 
@@ -120,7 +128,7 @@ Creates a project with linked repositories.
 | **Validation** | `githubOrg` must match `^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$`. Repo names must match `^[a-zA-Z0-9._-]+$`. |
 | **Business logic** | Deduplicates by comparing sorted repo names per user per org. Upserts repositories (updates `default_branch` on conflict). Resolves ownership for the creator post-creation. |
 
-### GET /api/projects/browse (L283)
+### GET /api/projects/browse (L288)
 
 Unified browse endpoint with optional "My Projects" subset filter.
 
@@ -134,7 +142,7 @@ Unified browse endpoint with optional "My Projects" subset filter.
 | **DB reads** | `projects`, `audits`, `repositories`, `project_repos`, `sessions`, `users` |
 | **Business logic** | Anonymous: projects with at least one public audit. Authenticated: public-audit projects OR own projects. `mine=true` further filters to own. `search` uses `ILIKE` with `escapeILike`. Ownership resolved per unique org (deduplicated). Results ordered by `created_at DESC`, limit 50. Severities sorted by severity order (critical first). |
 
-### GET /api/projects/:id (L416)
+### GET /api/projects/:id (L421)
 
 Fetches full project details including repos, components, dependencies, and last 10 audits.
 
@@ -148,7 +156,7 @@ Fetches full project details including repos, components, dependencies, and last
 | **DB reads** | `projects`, `users`, `repositories`, `project_repos`, `components`, `project_dependencies`, `audits`, `audit_findings` |
 | **Business logic** | Audit visibility: owner sees all, authenticated non-owner sees public + own, anonymous sees public only. Limit 10 audits. License aggregated from repo records. Severity counts computed per audit. |
 
-### PUT /api/projects/:id/branches (L610)
+### PUT /api/projects/:id/branches (L615)
 
 Updates branch selections for project repos.
 
@@ -165,7 +173,7 @@ Updates branch selections for project repos.
 | **DB writes** | `UPDATE project_repos SET branch` |
 | **Business logic** | Branch existence is NOT validated server-side; invalid branches will fail at clone time. |
 
-### DELETE /api/projects/:id (L2047)
+### DELETE /api/projects/:id (L2052)
 
 Deletes a project and all associated data.
 
@@ -185,7 +193,7 @@ Deletes a project and all associated data.
 
 ## 3. Estimation
 
-### POST /api/estimate (L681)
+### POST /api/estimate (L686)
 
 Rough cost estimation. Clones/updates repos, scans code files, computes rough token count.
 
@@ -202,7 +210,7 @@ Rough cost estimation. Clones/updates repos, scans code files, computes rough to
 | **External** | `cloneOrUpdate`, `scanCodeFiles`, `getDefaultBranchName`, `roughTokenCount`, `estimateCosts` |
 | **Business logic** | Auto-detects and updates default branch from cloned repo. Includes previous audit info if available. Clone errors are non-fatal; repos that fail are included with zero files/tokens. |
 
-### POST /api/estimate/precise (L808)
+### POST /api/estimate/precise (L813)
 
 Precise estimation using Anthropic count_tokens API with dynamic batching.
 
@@ -219,7 +227,7 @@ Precise estimation using Anthropic count_tokens API with dynamic batching.
 | **External** | `cloneOrUpdate`, `scanCodeFiles`, `countTokens` (Anthropic API), `estimateCostsFromTokenCount` |
 | **Business logic** | Batches file contents into chunks of max 20MB each. Calls `countTokens` per batch. Per-repo token counts are proportionally scaled from the rough-to-precise ratio. |
 
-### POST /api/estimate/components (L944)
+### POST /api/estimate/components (L949)
 
 Scoped cost estimate for selected components.
 
@@ -239,7 +247,7 @@ Scoped cost estimate for selected components.
 
 ## 4. Audit Lifecycle
 
-### POST /api/audit/start (L1110)
+### POST /api/audit/start (L1115)
 
 Starts a new audit asynchronously.
 
@@ -255,7 +263,7 @@ Starts a new audit asynchronously.
 | **Validation** | `level` must be `full`, `thorough`, or `opportunistic`. `apiKey` must start with `sk-ant-`. Component IDs validated against project. |
 | **Business logic** | Resolves ownership to set `is_owner` flag on audit. If `baseAuditId` is set, marks as incremental. `runAudit` is fire-and-forget (not awaited). |
 
-### GET /api/audit/:id (L1184)
+### GET /api/audit/:id (L1189)
 
 Gets audit status and progress.
 
@@ -269,7 +277,7 @@ Gets audit status and progress.
 | **DB reads** | `audits`, `projects`, `audit_commits`, `repositories` |
 | **Business logic** | `progressDetail` and `errorMessage` are only returned to privileged users (owner or requester). |
 
-### GET /api/audit/:id/report (L1263)
+### GET /api/audit/:id/report (L1268)
 
 Full audit report with three-tier access control.
 
@@ -283,7 +291,7 @@ Full audit report with three-tier access control.
 | **DB reads** | `audits`, `projects`, `audit_commits`, `repositories`, `audit_findings`, `audit_components`, `components`, `project_dependencies` |
 | **Access tiers** | **owner**: full findings. **requester**: low/informational in full; medium/high/critical redacted to severity + CWE + repo + status only. **public**: no individual findings (empty array), summary-only notice. |
 
-### DELETE /api/audit/:id (L2001)
+### DELETE /api/audit/:id (L2007)
 
 Deletes an audit. Requester-only.
 
@@ -301,7 +309,7 @@ Deletes an audit. Requester-only.
 
 ## 5. Audit History
 
-### GET /api/project/:id/audits (L1001)
+### GET /api/project/:id/audits (L1006)
 
 Lists audits for a project, visibility-filtered.
 
@@ -320,7 +328,7 @@ Lists audits for a project, visibility-filtered.
 
 ## 6. Findings
 
-### GET /api/audit/:id/findings (L1488)
+### GET /api/audit/:id/findings (L1493)
 
 Lists findings for an audit with three-tier access control.
 
@@ -335,7 +343,7 @@ Lists findings for an audit with three-tier access control.
 | **Access tiers** | **owner**: all fields. **requester**: medium/high/critical redacted (title, description, exploitation, recommendation, codeSnippet, filePath, lines nulled; severity, cweId, repoName, status preserved). **public**: empty array. |
 | **Sort order** | By severity: critical > high > medium > low > informational. |
 
-### PATCH /api/findings/:id/status (L1601)
+### PATCH /api/findings/:id/status (L1606)
 
 Updates a finding's status. Owner-only.
 
@@ -356,7 +364,7 @@ Updates a finding's status. Owner-only.
 
 ## 7. Responsible Disclosure
 
-### POST /api/audit/:id/notify-owner (L1888)
+### POST /api/audit/:id/notify-owner (L1893)
 
 Triggers responsible disclosure notification. Creates a GitHub issue on the project's top-starred repo and sets the auto-publish timer.
 
@@ -374,7 +382,7 @@ Triggers responsible disclosure notification. Creates a GitHub issue on the proj
 | **External** | `createIssue(githubToken, org, repo, title, body)` |
 | **Business logic** | **Idempotent**: if already notified, returns existing data. **Publishable-after** timer based on max severity: critical = 6 months, high/medium = 3 months, low/informational/none = null (immediate). GitHub issue creation failure is non-fatal; notification is recorded regardless. Issue is created on the highest-starred repo in the project. |
 
-### POST /api/audit/:id/publish (L1783)
+### POST /api/audit/:id/publish (L1788)
 
 Makes an audit report public.
 
@@ -389,7 +397,7 @@ Makes an audit report public.
 | **Response (500)** | `{ error }` |
 | **DB writes** | `UPDATE audits SET is_public = TRUE` |
 
-### POST /api/audit/:id/unpublish (L1836)
+### POST /api/audit/:id/unpublish (L1841)
 
 Makes a public report private again. Also clears `publishable_after`.
 
@@ -408,7 +416,7 @@ Makes a public report private again. Also clears `publishable_after`.
 
 ## 8. Comments
 
-### POST /api/audit/:id/comments (L1657)
+### POST /api/audit/:id/comments (L1662)
 
 Adds a comment to an audit, optionally linked to a specific finding.
 
@@ -425,7 +433,7 @@ Adds a comment to an audit, optionally linked to a specific finding.
 | **DB writes** | `INSERT INTO audit_comments` |
 | **Validation** | `content` is trimmed; must be 1..10000 characters after trim. |
 
-### GET /api/audit/:id/comments (L1718)
+### GET /api/audit/:id/comments (L1723)
 
 Lists comments for an audit.
 
@@ -444,7 +452,7 @@ Lists comments for an audit.
 
 ## 9. Component Analysis
 
-### POST /api/projects/:id/analyze-components (L2133)
+### POST /api/projects/:id/analyze-components (L2138)
 
 Starts an agentic component analysis in the background.
 
@@ -462,7 +470,7 @@ Starts an agentic component analysis in the background.
 | **External** | `cloneOrUpdate`, `scanCodeFiles`, `runComponentAnalysis` (fire-and-forget) |
 | **Business logic** | Clones all repos synchronously before starting background analysis. Analysis record is created before the background task. |
 
-### GET /api/projects/:id/component-analysis/:analysisId (L2217)
+### GET /api/projects/:id/component-analysis/:analysisId (L2222)
 
 Polls analysis status.
 
@@ -479,7 +487,7 @@ Polls analysis status.
 
 [REC] Consider adding at minimum an ownership/requester check, or at least verify the analysis is associated with a visible project.
 
-### GET /api/projects/:id/components (L2256)
+### GET /api/projects/:id/components (L2261)
 
 Lists components for a project.
 
@@ -498,7 +506,7 @@ Lists components for a project.
 
 ## 10. Dependencies
 
-### POST /api/dependencies/:id/link (L2296)
+### POST /api/dependencies/:id/link (L2301)
 
 Links a project dependency to an existing CodeWatch project.
 
@@ -519,7 +527,7 @@ Links a project dependency to an existing CodeWatch project.
 
 ## 11. Public
 
-### GET /api/reports (L2364)
+### GET /api/reports (L2369)
 
 Lists public completed audit reports.
 
@@ -539,13 +547,13 @@ Lists public completed audit reports.
 
 | Tag | Location | Description |
 |---|---|---|
-| [GAP] | `getRedactedSeverities` (L64) | Defined but never called. Its return values for `requester` tier (empty set) contradict the actual inline redaction logic in `/audit/:id/report` (L1368) and `/audit/:id/findings` (L1556) which redact medium/high/critical. |
+| [GAP] | `getRedactedSeverities` (L69) | Defined but never called. Its return values for `requester` tier (empty set) contradict the actual inline redaction logic in `/audit/:id/report` (L1373) and `/audit/:id/findings` (L1561) which redact medium/high/critical. |
 | [REC] | `getRedactedSeverities` | Refactor report and findings endpoints to call this helper, or remove it entirely. |
-| [GAP] | `GET /api/project/:id/audits` (L1001) | No 404 when project does not exist; returns empty array silently. |
-| [GAP] | `GET /api/projects/:id/components` (L2256) | No 404 when project does not exist; returns empty array silently. |
-| [GAP] | `GET /api/projects/:id/component-analysis/:analysisId` (L2217) | No auth check; anyone can poll any analysis status by ID. |
+| [GAP] | `GET /api/project/:id/audits` (L1006) | No 404 when project does not exist; returns empty array silently. |
+| [GAP] | `GET /api/projects/:id/components` (L2261) | No 404 when project does not exist; returns empty array silently. |
+| [GAP] | `GET /api/projects/:id/component-analysis/:analysisId` (L2222) | No auth check; anyone can poll any analysis status by ID. |
 | [REC] | Component analysis polling | Add ownership/requester check or verify project visibility. |
-| [GAP] | `POST /api/estimate` (L681) | No auth required; anyone can trigger repo cloning and disk I/O. |
+| [GAP] | `POST /api/estimate` (L686) | No auth required; anyone can trigger repo cloning and disk I/O. |
 | [REC] | Estimation endpoints | Consider rate-limiting or requiring auth for clone-triggering estimation endpoints. |
-| [GAP] | `POST /api/estimate/precise` (L808) | No auth required, but consumes Anthropic API credits via the service key. |
+| [GAP] | `POST /api/estimate/precise` (L813) | No auth required, but consumes Anthropic API credits via the service key. |
 | [REC] | Precise estimation | Require auth to prevent abuse of service-key-funded token counting. |

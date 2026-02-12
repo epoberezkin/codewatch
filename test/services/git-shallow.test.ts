@@ -1,3 +1,4 @@
+// Product: product/flows/audit-lifecycle.md
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Track calls to simpleGit methods

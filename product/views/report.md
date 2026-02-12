@@ -12,6 +12,8 @@
 - `public/report.html`
 - `src/client/report.ts`
 
+**Related spec:** [client/report.md](../../spec/client/report.md), [api.md](../../spec/api.md), [services/ownership.md](../../spec/services/ownership.md)
+
 ---
 
 ## Navigation Context
@@ -193,6 +195,8 @@ Each finding renders as a `.finding-card` with severity-based border class (`.fi
 
 Always visible (section shown for all tiers). Comment form visible only when `currentUser && (isOwner || isRequester)`.
 
+[GAP] The server API (`POST /api/audit/:id/comments`) allows any authenticated user to comment on public audits, but the client only shows the comment form to owners and requesters. This is a client-server access mismatch.
+
 - **Load:** `GET /api/audit/{auditId}/comments` returns `Comment[]`
 - **Display:** Each comment shows username, formatted datetime, and content. "No comments yet." when empty.
 - **Submit:** `POST /api/audit/{auditId}/comments` with `{ content: string }`. Clears input and reloads comments on success.
@@ -213,12 +217,12 @@ interface Finding {
   severity: string;         // critical | high | medium | low | informational
   cweId: string;
   cvssScore: number;
-  title: string;            // empty string when redacted
-  description: string;      // empty string when redacted
-  exploitation: string;     // empty string when redacted
-  recommendation: string;   // empty string when redacted
-  codeSnippet: string;      // empty string when redacted
-  filePath: string;         // empty string when redacted
+  title: string | null;      // null when redacted
+  description: string | null; // null when redacted
+  exploitation: string | null; // null when redacted
+  recommendation: string | null; // null when redacted
+  codeSnippet: string | null; // null when redacted
+  filePath: string | null;   // null when redacted
   lineStart: number;
   lineEnd: number;
   repoName: string;

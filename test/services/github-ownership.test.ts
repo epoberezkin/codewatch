@@ -1,3 +1,4 @@
+// Product: product/flows/authentication.md
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // Mock config to prevent env var errors

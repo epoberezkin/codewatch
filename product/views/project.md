@@ -24,8 +24,7 @@ Top card, always visible. Shows a loading spinner while the API call is in fligh
 
 - **Project name** (`<h1>`, inline) and **ownership badge** (inline `<span>`):
   - `owner` badge (green) when the current user is a verified GitHub org owner.
-  - `member` badge when the user is an org member but not owner.
-  - `re-auth needed` link (yellow, links to `/auth/github?returnTo=...`) when the user has a stale token and is not yet verified as owner.
+  - `re-auth needed` link (yellow, links to `/auth/github?returnTo=...`) when the user has a stale token and is not yet verified as owner (`renderOwnershipBadge` from common.ts handles this logic).
   - No badge for anonymous visitors or non-members.
 - **"New Audit" button** (top-right): links to `/estimate.html?projectId=<id>`.
 - **Description**: project description, or fallback `"GitHub org: <org>"` when description is empty.
@@ -98,13 +97,13 @@ Dependencies are grouped by `ecosystem` (fallback: `'other'`). Each ecosystem ge
 
 ### 6. Audit History
 
-Always visible. Shows an empty state ("No audits yet / Run the first security audit for this project.") when `audits.length === 0`.
+Always visible. The API returns the **last 10 audits** only. Shows an empty state ("No audits yet / Run the first security audit for this project.") when `audits.length === 0`.
 
 Rendered as a vertical **timeline** (`.timeline`) with connected dots:
 
 Each timeline item contains:
 - **Date**: formatted via `formatDate()`.
-- **Audit level** (bold): e.g., "standard", "deep".
+- **Audit level** (bold): e.g., "full", "thorough", "opportunistic".
 - **Incremental badge** (`badge-running`): shown only when `audit.isIncremental === true`.
 - **Status badge**: colored by status -- `badge-completed` (green), `badge-failed` (red), or `badge-running` (blue) for in-progress.
 - **Public badge** (`badge-completed`): shown when `audit.isPublic === true`.
@@ -113,6 +112,7 @@ Each timeline item contains:
   - `completed` status: links to `/report.html?auditId=<id>`.
   - `failed` status: links to `#` (no-op).
   - Other statuses (running/pending): links to `/audit.html?auditId=<id>` (progress page).
+  - [GAP] `completed_with_warnings` audits are not handled explicitly — they fall into "Other statuses" and link to the progress page instead of the report page.
 
 The first (most recent) item gets an additional `.latest` CSS class.
 
@@ -162,6 +162,8 @@ Server-side guards:
 
 - If the API call fails, the loading spinner is replaced with a red error notice showing the error message.
 - Delete failures show an error via `showError()`.
+
+**Related spec:** [client/project.md](../../spec/client/project.md), [api.md](../../spec/api.md), [services/ownership.md](../../spec/services/ownership.md)
 
 ## Source Files
 

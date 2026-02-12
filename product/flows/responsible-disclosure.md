@@ -32,11 +32,13 @@ After the audit completes, the requester can view the report at `GET /api/audit/
 **API**: `POST /api/audit/:id/notify-owner`
 
 Prerequisites:
-- Audit must have `status = 'completed'`.
+- Audit must have `status = 'completed'` (strict equality check — `completed_with_warnings` is **not** accepted).
 - Only the audit requester (`requester_id`) can trigger notification.
 
+[GAP] Audits with `completed_with_warnings` status cannot trigger owner notification despite having valid findings.
+
 Actions:
-1. **Create GitHub Issue**: On the most-starred repository in the project, using the requester's GitHub token. The issue includes the finding count, max severity, audit ID, and a link to CodeWatch.
+1. **Create GitHub Issue**: On the most recently pushed repository in the project, using the requester's GitHub token. The issue includes the finding count, max severity, audit ID, and a link to CodeWatch.
 2. **Set `publishable_after`**: Based on max severity:
 
    | Max Severity | Disclosure Delay |
@@ -99,7 +101,7 @@ function resolveAccessTier(audit, requesterId, isOwner): AccessTier {
 | Tier | Who | Findings Visible | Details Visible | Summary |
 | ---- | --- | ---------------- | --------------- | ------- |
 | **Owner** | GitHub owner of the entity, OR anyone when report is public/auto-published | All severities | All fields | Yes |
-| **Requester** | The user who started and paid for the audit | All severities | Low/Informational: full. Medium/High/Critical: severity + CWE + status only | Yes |
+| **Requester** | The user who started and paid for the audit | All severities | Low/Informational: full. Medium/High/Critical: severity + CWE + repo + status only | Yes |
 | **Public** | Everyone else | None (empty array) | None | Yes (severity counts only) |
 
 ### Redaction Rules by Tier
@@ -174,6 +176,8 @@ stateDiagram-v2
 | `Only the project owner can publish` | 403 | Non-owner trying to publish |
 | `Re-authentication required to verify ownership` | 403 | Session lacks org scope |
 | GitHub issue creation failure | Logged | Issue creation continues silently; notification is still recorded |
+
+**Related spec:** [api.md](../../spec/api.md), [services/github.md](../../spec/services/github.md), [database.md](../../spec/database.md)
 
 ## Key Files
 

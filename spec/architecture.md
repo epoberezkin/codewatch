@@ -7,7 +7,7 @@
 CodeWatch is an AI-powered security audit platform for open-source projects.
 
 - **Server:** Express.js (v5) on Node.js with TypeScript (CommonJS output)
-- **Client:** Vanilla TypeScript compiled to ES modules, served as static files (no framework, no bundler)
+- **Client:** Vanilla TypeScript compiled to JS (global scope, no module imports), served as static files (no framework, no bundler)
 - **Database:** PostgreSQL 18 with sequential SQL migrations applied at startup
 - **External services:** GitHub API (REST + GraphQL), Anthropic Claude API (Messages + `count_tokens`)
 - **Local filesystem:** Repos cloned to `repos/` directory for git operations and file scanning
@@ -20,8 +20,11 @@ CodeWatch is an AI-powered security audit platform for open-source projects.
 index.ts
   -> initPool(), runMigrations()
   -> createApp()
+       -> express.json(), cookieParser()
        -> express.static(public/)
-       -> gateMiddleware / gateHandler
+       -> POST /gate  (gateHandler)
+       -> gateMiddleware
+       -> GET /api/health
        -> /auth  (routes/auth.ts)
        -> /api   (routes/api.ts)
   -> app.listen(PORT)
@@ -39,11 +42,11 @@ index.ts
 ```
 src/client/*.ts
   -> tsc (tsconfig.client.json)
-  -> public/js/*.js  (ES modules)
-  -> <script type="module"> in HTML pages
+  -> public/js/*.js  (global scope scripts)
+  -> <script src="/js/*.js"> in HTML pages
 ```
 
-Each page has its own TypeScript entry point. `common.ts` provides shared utilities (API helpers, DOM helpers, formatting). No bundler, no framework -- the browser loads ES modules directly.
+Each page has its own TypeScript entry point. `common.ts` provides shared utilities (API helpers, DOM helpers, formatting). No bundler, no framework -- all scripts share a single global scope via plain `<script>` tags.
 
 ### Database
 

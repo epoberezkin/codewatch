@@ -73,6 +73,8 @@ The gate middleware runs **after** `express.static`, so:
 
 [REC] Add rate limiting (e.g., express-rate-limit) to `POST /gate` to prevent brute-force attacks on the gate password.
 
+**Related spec:** [auth.md](../../spec/auth.md), [config.md](../../spec/config.md)
+
 ## Source Files
 
 - `/code/codewatch/public/gate.html` -- client-side page

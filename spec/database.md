@@ -4,16 +4,16 @@
 
 CodeWatch uses PostgreSQL with the `pgcrypto` extension for UUID generation (`gen_random_uuid()`).
 
-**Connection management**: [db.ts](../src/server/db.ts) exposes a `pg.Pool` singleton via `initPool(connectionString)` / `getPool()`.
+**Connection management**: [db.ts](../src/server/db.ts) exposes a `pg.Pool` singleton via `initPool(connectionString)` / `getPool()` / `closePool()`.
 
-**Migration system**: [db.ts](../src/server/db.ts) (L19-L65) implements a file-based migration runner:
+**Migration system**: [db.ts](../src/server/db.ts#L23-L69) implements a file-based migration runner. [migrate.ts](../src/server/migrate.ts) is the CLI entry point (`npm run migrate`) that calls `runMigrations()`:
 
 1. Creates a `_migrations` tracking table on first run.
 2. Reads `sql/*.sql` files sorted lexicographically.
 3. For each unapplied file: `BEGIN` -> execute SQL -> insert into `_migrations` -> `COMMIT`. On failure: `ROLLBACK` + throw.
 4. Resolves `sql/` relative to source; falls back to `../../sql/` for `dist/` builds.
 
-**Docker bootstrap**: [init-db.sql](../docker/init-db.sql) enables `pgcrypto` only; all schema creation is handled by migrations.
+**Docker bootstrap**: [init-db.sql](../docker/init-db.sql) enables `pgcrypto`; [001_initial.sql](../sql/001_initial.sql) also includes `CREATE EXTENSION IF NOT EXISTS "pgcrypto"` for non-Docker environments. All schema creation is handled by migrations.
 
 ### Migration History
 
@@ -26,7 +26,7 @@ CodeWatch uses PostgreSQL with the `pgcrypto` extension for UUID generation (`ge
 
 ### Internal Migration Table
 
-#### [`_migrations`](../src/server/db.ts) (L21-L27)
+#### [`_migrations`](../src/server/db.ts#L25-L31)
 
 Created by `db.ts`, not by any SQL migration file.
 
@@ -42,7 +42,7 @@ Created by `db.ts`, not by any SQL migration file.
 
 ## 1. Users & Sessions
 
-### [`users`](../sql/001_initial.sql) (L7-L15)
+### [`users`](../sql/001_initial.sql#L7-L15)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -60,7 +60,7 @@ Created by `db.ts`, not by any SQL migration file.
 
 ---
 
-### [`sessions`](../sql/001_initial.sql) (L17-L23)
+### [`sessions`](../sql/001_initial.sql#L17-L23)
 
 | Column | Type | Constraints | Default | Migration |
 |--------|------|-------------|---------|-----------|
@@ -86,7 +86,7 @@ Created by `db.ts`, not by any SQL migration file.
 
 ## 2. Projects & Repositories
 
-### [`projects`](../sql/001_initial.sql) (L31-L48)
+### [`projects`](../sql/001_initial.sql#L31-L48)
 
 | Column | Type | Constraints | Default | Migration |
 |--------|------|-------------|---------|-----------|
@@ -122,7 +122,7 @@ Created by `db.ts`, not by any SQL migration file.
 
 ---
 
-### [`repositories`](../sql/001_initial.sql) (L57-L75)
+### [`repositories`](../sql/001_initial.sql#L57-L75)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -150,7 +150,7 @@ Created by `db.ts`, not by any SQL migration file.
 
 ---
 
-### [`project_repos`](../sql/001_initial.sql) (L83-L87)
+### [`project_repos`](../sql/001_initial.sql#L83-L87)
 
 Junction table: projects <-> repositories (many-to-many).
 
@@ -174,7 +174,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ## 3. Audits & Findings
 
-### [`audits`](../sql/001_initial.sql) (L93-L123)
+### [`audits`](../sql/001_initial.sql#L93-L123)
 
 | Column | Type | Constraints | Default | Migration |
 |--------|------|-------------|---------|-----------|
@@ -230,7 +230,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ---
 
-### [`audit_commits`](../sql/001_initial.sql) (L134-L140)
+### [`audit_commits`](../sql/001_initial.sql#L134-L140)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -251,7 +251,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ---
 
-### [`audit_findings`](../sql/001_initial.sql) (L146-L166)
+### [`audit_findings`](../sql/001_initial.sql#L146-L166)
 
 | Column | Type | Constraints | Default | Migration |
 |--------|------|-------------|---------|-----------|
@@ -291,7 +291,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ---
 
-### [`audit_comments`](../sql/001_initial.sql) (L177-L185)
+### [`audit_comments`](../sql/001_initial.sql#L177-L185)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -316,7 +316,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ## 4. Components & Analysis
 
-### [`components`](../sql/002_ownership_and_components.sql) (L25-L39)
+### [`components`](../sql/002_ownership_and_components.sql#L25-L39)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -348,7 +348,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ---
 
-### [`component_analyses`](../sql/002_ownership_and_components.sql) (L44-L57)
+### [`component_analyses`](../sql/002_ownership_and_components.sql#L44-L57)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -376,7 +376,7 @@ Junction table: projects <-> repositories (many-to-many).
 
 ---
 
-### [`audit_components`](../sql/002_ownership_and_components.sql) (L61-L67)
+### [`audit_components`](../sql/002_ownership_and_components.sql#L61-L67)
 
 Junction table: audits <-> components.
 
@@ -399,7 +399,7 @@ Junction table: audits <-> components.
 
 ## 5. Ownership & Cache
 
-### [`ownership_cache`](../sql/002_ownership_and_components.sql) (L11-L20)
+### [`ownership_cache`](../sql/002_ownership_and_components.sql#L11-L20)
 
 Cache for GitHub org ownership lookups (15-minute TTL).
 
@@ -426,7 +426,7 @@ Cache for GitHub org ownership lookups (15-minute TTL).
 
 ---
 
-### [`project_dependencies`](../sql/002_ownership_and_components.sql) (L93-L106)
+### [`project_dependencies`](../sql/002_ownership_and_components.sql#L93-L106)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -458,7 +458,7 @@ Cache for GitHub org ownership lookups (15-minute TTL).
 
 ## 6. Configuration & Metadata
 
-### [`project_watches`](../sql/001_initial.sql) (L194-L203)
+### [`project_watches`](../sql/001_initial.sql#L194-L203)
 
 Schema-ready, post-MVP.
 
@@ -487,7 +487,7 @@ Schema-ready, post-MVP.
 
 ---
 
-### [`model_pricing`](../sql/001_initial.sql) (L212-L225)
+### [`model_pricing`](../sql/001_initial.sql#L212-L225)
 
 | Column | Type | Constraints | Default |
 |--------|------|-------------|---------|
@@ -503,7 +503,7 @@ Schema-ready, post-MVP.
 
 #### Seed Data
 
-Inserted in [001_initial.sql](../sql/001_initial.sql) (L222-L225):
+Inserted in [001_initial.sql](../sql/001_initial.sql#L222-L225):
 
 | model_id | display_name | input $/Mtok | output $/Mtok | context_window | max_output |
 |----------|-------------|-------------|--------------|----------------|------------|

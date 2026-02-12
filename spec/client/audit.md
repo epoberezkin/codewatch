@@ -1,6 +1,6 @@
 # audit.ts -- Audit Progress Module
 
-**Source**: [`audit.ts`](../../src/client/audit.ts) (L1-L194)
+**Source**: [`audit.ts`](../../src/client/audit.ts#L1-L199)
 **HTML**: `public/audit.html`
 
 ---
@@ -11,7 +11,7 @@ Polls audit status every 3 seconds and renders progress (bar, file list, status 
 
 ---
 
-## Interface (L6-L30)
+## [Interface](../../src/client/audit.ts#L7-L31)
 
 ```ts
 interface AuditStatus {
@@ -43,7 +43,7 @@ interface AuditStatus {
 
 ---
 
-## State Variables (L39-L41)
+## [State Variables](../../src/client/audit.ts#L40-L42)
 
 | Variable | Type | Description |
 |---|---|---|
@@ -51,37 +51,37 @@ interface AuditStatus {
 | `consecutiveErrors` | `number` | Consecutive poll failure counter |
 
 **Constants**:
-- `MAX_CONSECUTIVE_ERRORS = 5` (L41)
+- `MAX_CONSECUTIVE_ERRORS = 5` (L42)
 
 ---
 
 ## Functions
 
-### poll (L43-L66)
+### [poll](../../src/client/audit.ts#L45-L68)
 
 | Function | Signature | Description |
 |---|---|---|
 | `poll` | `() => Promise<void>` | Fetches audit status. Resets `consecutiveErrors` on success. Calls `renderStatus`. Clears interval on terminal status (`completed`, `completed_with_warnings`, `failed`). On error, increments counter; at 5 consecutive, stops polling and shows error. |
 
-### renderStatus (L68-L153)
+### [renderStatus](../../src/client/audit.ts#L71-L157)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderStatus` | `(data: AuditStatus) => void` | Renders all UI elements from audit status data |
 
 Rendering logic:
-1. **Status badge** (L70-L82): Maps status to badge CSS class (`badge-pending`, `badge-running`, `badge-completed`, `badge-failed`)
-2. **Audit level** (L83): Sets audit level text
-3. **Ownership badge** (L86-L88): Shows owner badge if `isOwner`
-4. **Commit info** (L91-L96): Formats `repoName@sha7` for each commit
-5. **Incremental badge** (L98-L100): Shows "incremental" badge if applicable
-6. **Progress bar** (L103-L123): Calculates percentage, sets fill width, sets status label from status map
-7. **File list** (L126-L128): Delegates to `renderFileList`
-8. **Findings summary** (L131-L134): Shows total findings count
-9. **Completion card** (L137-L147): Shows on `completed` / `completed_with_warnings`. Sets report link, summary text with max severity.
-10. **Error notice** (L150-L153): Shows on `failed` with error message
+1. **Status badge** (L73-L85): Maps status to badge CSS class (`badge-pending`, `badge-running`, `badge-completed`, `badge-failed`)
+2. **Audit level** (L86): Sets audit level text
+3. **Ownership badge** (L89-L91): Shows owner badge if `isOwner`
+4. **Commit info** (L94-L99): Formats `repoName@sha7` for each commit
+5. **Incremental badge** (L101-L103): Shows "incremental" badge if applicable
+6. **Progress bar** (L106-L126): Calculates percentage, sets fill width, sets status label from status map
+7. **File list** (L129-L131): Delegates to `renderFileList`
+8. **Findings summary** (L134-L137): Shows total findings count
+9. **Completion card** (L140-L150): Shows on `completed` / `completed_with_warnings`. Sets report link, summary text with max severity.
+10. **Error notice** (L153-L156): Shows on `failed` with error message
 
-### renderFileList (L156-L174)
+### [renderFileList](../../src/client/audit.ts#L160-L178)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -101,7 +101,7 @@ Rendering logic:
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `document` | `visibilitychange` | L177-L189 | Pauses polling when tab hidden (`clearInterval`). Resumes with immediate poll when visible. |
+| `document` | `visibilitychange` | L181-L193 | Pauses polling when tab hidden (`clearInterval`). Resumes with immediate poll when visible. |
 
 ---
 
@@ -109,7 +109,7 @@ Rendering logic:
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/audit/{auditId}` | poll | L45 |
+| GET | `/api/audit/{auditId}` | poll | L47 |
 
 ---
 
@@ -172,6 +172,6 @@ No timer showing how long the audit has been running (despite having `createdAt`
 
 ## [GAP] Polling Resumes Without Error Count Reset
 
-When the tab becomes visible again (L183-L188), `consecutiveErrors` is not reset. If there were prior errors, the counter carries over, potentially triggering the 5-error stop prematurely.
+When the tab becomes visible again (L187-L192), `consecutiveErrors` is not reset. If there were prior errors, the counter carries over, potentially triggering the 5-error stop prematurely.
 
 ## [REC] Reset `consecutiveErrors = 0` when resuming polling on visibility change. Consider showing elapsed time from `startedAt`.

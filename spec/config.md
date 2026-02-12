@@ -8,7 +8,7 @@ Source: [`config.ts`](../src/server/config.ts)
 
 ## Exported values
 
-### [`config`](../src/server/config.ts) (L3-L16)
+### [`config`](../src/server/config.ts#L3-L16)
 
 Single named export. Type: object literal (inferred).
 

@@ -10,6 +10,8 @@
 - `public/audit.html`
 - `src/client/audit.ts`
 
+**Related spec:** [client/audit.md](../../spec/client/audit.md), [services/audit.md](../../spec/services/audit.md), [api.md](../../spec/api.md)
+
 ---
 
 ## Navigation Context
@@ -29,7 +31,7 @@ Displays metadata about the running audit:
 |---|---|---|
 | Status badge | `audit-status-badge` | Colored badge: `badge-pending`, `badge-running`, `badge-completed`, or `badge-failed` depending on phase |
 | Owner badge | `audit-owner-badge` | Rendered via `renderOwnershipBadge()` if `isOwner` is true |
-| Audit level | `audit-level` | Text label (e.g., "standard", "deep") |
+| Audit level | `audit-level` | Text label (e.g., "full", "thorough", "opportunistic") |
 | Commit SHA | `audit-commit` | Format: `repoName@abc1234`, comma-separated if multiple repos |
 | Type | `audit-type` | Shows `<span class="badge badge-running">incremental</span>` if `isIncremental` is true; empty otherwise |
 
@@ -132,8 +134,8 @@ interface AuditStatus {
 - [GAP] No elapsed time or ETA display. The user sees file counts but has no sense of how long the audit has been running or how long it might take.
 - [REC] Show elapsed time since `startedAt` and optionally estimate remaining time based on `filesAnalyzed / filesToAnalyze` rate.
 
-- [GAP] The `estimating` status is included in the status label map but not mentioned in the HTML title/meta or the documented audit lifecycle. It appears to be an intermediate phase between planning and analyzing.
-- [REC] Clarify whether `estimating` is a distinct backend phase or an artifact; if used, document it in the product lifecycle.
+- [GAP] The `estimating` status is included in the DB CHECK constraint and the client status label map, but no server code ever sets this status. It is dead code in the current implementation.
+- [REC] Either remove `estimating` from the status label map and DB constraint, or implement it as a distinct phase between planning and analyzing.
 
 - [GAP] No cancel/abort capability. Once an audit starts, there is no UI mechanism to stop it.
 - [REC] Add a "Cancel Audit" button (owner-only) that calls a cancel API endpoint.

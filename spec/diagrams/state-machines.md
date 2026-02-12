@@ -13,12 +13,10 @@ stateDiagram-v2
 
     classifying --> planning : classification stored
 
-    planning --> estimating : plan computed
-    planning --> estimating : planning returns 0 files (heuristic fallback)
+    planning --> analyzing : files selected by budget
 
-    estimating --> analyzing : scope estimated, files selected
-
-    cloning --> analyzing : incremental audit (skip planning)
+    cloning --> classifying : incremental audit (if first audit, no category)
+    cloning --> analyzing : incremental audit (category exists, skip planning)
 
     analyzing --> synthesizing : all batches succeeded
     analyzing --> failed : any batch fails (immediate stop)
@@ -29,7 +27,11 @@ stateDiagram-v2
     cloning --> failed : clone error
     classifying --> failed : classification error
     planning --> failed : planning error
-    estimating --> failed : estimation error
+    note left of planning
+        estimating exists in DB CHECK
+        constraint but is never set
+        by current code (dead state)
+    end note
     pending --> failed : unhandled exception
 
     completed --> [*]

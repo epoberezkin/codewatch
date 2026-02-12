@@ -109,7 +109,7 @@ Sends to Claude:
 - Prompt template: `classify`
 
 Returns `ClassificationResult`:
-- `category`: e.g., "web-application", "library", "cli-tool"
+- `category`: e.g., "library", "cli_tool", "client_server"
 - `description`: Natural language summary
 - `involved_parties`: Stakeholders
 - `threat_model`: Generated or extracted from repo
@@ -291,6 +291,8 @@ sequenceDiagram
     User->>Server: GET /api/audit/:id (poll)
     Server-->>User: { status: 'completed', ... }
 ```
+
+**Related spec:** [services/audit.md](../../spec/services/audit.md), [services/planning.md](../../spec/services/planning.md), [services/tokens.md](../../spec/services/tokens.md), [api.md](../../spec/api.md)
 
 ## Key Files
 

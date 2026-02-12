@@ -1,3 +1,4 @@
+// Product: product/flows/component-analysis.md
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { TestContext, startTestServer, teardownTestServer, truncateAllTables } from '../setup';
 import { createTestUser, createTestSession, authenticatedFetch } from '../helpers';

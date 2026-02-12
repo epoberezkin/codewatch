@@ -152,9 +152,9 @@ Three-step wizard that guides the user from a GitHub URL to creating a new CodeW
 
 [REC] Add a timeout (e.g., the default 60s from `apiFetch`) and ensure the error handler restores the UI. Consider adding a "Cancel" button on the loading overlay.
 
-[GAP] There is no duplicate-project detection. If the user creates a project for the same org/repos that already exist, a new project is created. The user is not warned.
+[GAP] No client-side duplicate-project handling. The server returns 409 for exact duplicates (same user, same org, same sorted repo set), but the client shows a generic error instead of redirecting to the existing project.
 
-[REC] Either check for existing projects with the same org before calling `POST /api/projects`, or have the server return the existing project ID with a notice.
+[REC] On 409 response, extract the existing project ID from the response body and redirect to it, or show a link to the existing project.
 
 ---
 
@@ -173,6 +173,8 @@ Three-step wizard that guides the user from a GitHub URL to creating a new CodeW
 [GAP] Branch fetch errors are silently swallowed (catch block just restores UI). The user gets no feedback about why the dropdown disappeared.
 
 [REC] Show a brief inline error or tooltip when branch fetching fails so the user knows to retry.
+
+**Related spec:** [client/home.md](../../spec/client/home.md), [api.md](../../spec/api.md), [services/github.md](../../spec/services/github.md)
 
 ---
 

@@ -45,7 +45,7 @@ Ownership is resolved via `resolveOwnership()` in `/src/server/services/ownershi
 1. **Cache check**: Query `ownership_cache` table (15-minute TTL). Return immediately on cache hit.
 2. **Personal account**: If `githubOrg` matches the user's `githubUsername` (case-insensitive), the user is the owner with role `personal`.
 3. **Org membership API**: Call `GET https://api.github.com/user/memberships/orgs/:org`. If the response shows `role: admin` and `state: active`, the user is an owner.
-4. **Repo permissions fallback**: If the membership API returns 403 (third-party app restrictions), fall back to checking repo permissions. Fetch the org's most-starred public repo and check if the user has `admin` permission.
+4. **Repo permissions fallback**: If the membership API returns 403 (third-party app restrictions), fall back to checking repo permissions. Fetch the org's most recently pushed public repo and check if the user has `admin` permission.
 5. **Cache result**: Store in `ownership_cache` (unless `needsReauth` is true). TTL is 15 minutes.
 
 ### Ownership Roles
@@ -116,6 +116,8 @@ sequenceDiagram
     Server-->>Browser: 302 Redirect to /estimate/xyz + Set-Cookie: session=<id>
     Browser-->>User: Logged in, showing estimate page
 ```
+
+**Related spec:** [auth.md](../../spec/auth.md), [services/github.md](../../spec/services/github.md), [services/ownership.md](../../spec/services/ownership.md)
 
 ## Key Files
 

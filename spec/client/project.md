@@ -1,6 +1,6 @@
 # project.ts -- Project Page Module
 
-**Source**: [`project.ts`](../../src/client/project.ts) (L1-L322)
+**Source**: [`project.ts`](../../src/client/project.ts#L1-L329)
 **HTML**: `public/project.html`
 
 ---
@@ -18,7 +18,7 @@ Displays a project dashboard with:
 
 ---
 
-## Interface (L6-L67)
+## [Interface](../../src/client/project.ts#L7-L68)
 
 ```ts
 interface ProjectDetail {
@@ -44,47 +44,47 @@ interface ProjectDetail {
 
 ## Functions
 
-### renderProject (L92-L187)
+### [renderProject](../../src/client/project.ts#L94-L189)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderProject` | `(project: ProjectDetail) => void` | Renders project header, ownership badge (with returnTo re-auth link), new audit button, meta info, classification/threat model, and repo cards. |
 
-**Classification rendering** (L125-L170):
+**Classification rendering** (L127-L172):
 - Shows category badge
 - Threat model: renders involved parties table (party/can/cannot) with source badge, or plain text threat model (truncated to 2000 chars)
 
-**Repo cards** (L173-L186):
+**Repo cards** (L175-L188):
 - Each repo as a card with name (linked to GitHub with `target="_blank" rel="noopener"`), language, license, stars, description
 
-### renderComponents (L189-L209)
+### [renderComponents](../../src/client/project.ts#L192-L212)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderComponents` | `(components: ProjectDetail['components']) => void` | Renders component table with name, description, repo, role, files, tokens, security summary. Hidden if no components. |
 
-### renderDependencies (L211-L243)
+### [renderDependencies](../../src/client/project.ts#L215-L247)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderDependencies` | `(dependencies: ProjectDetail['dependencies']) => void` | Groups dependencies by ecosystem. Renders linked projects as "View Project" links, unlinked as "Add as Project" buttons (authenticated) or "source" links. Uses `attachAddAsProjectHandlers('.add-as-project-btn')`. |
 
-### renderAudits (L245-L301)
+### [renderAudits](../../src/client/project.ts#L250-L306)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderAudits` | `(audits: ProjectDetail['audits']) => void` | Renders audit timeline. Each entry shows date, level, incremental/public badges, status badge, severity counts, and "View" link. First item gets `latest` CSS class. |
 
-**View link logic** (L263-L267):
+**View link logic** (L268-L272):
 - `completed` -> `/report.html?auditId=`
 - `failed` -> `#`
 - Other (in-progress) -> `/audit.html?auditId=`
 
-**Current security posture** (L290-L300):
+**Current security posture** (L294-L305):
 - Derived from latest `completed` audit
 - Shows audit level, date, severity count badges
 
-### renderDeleteButton (L303-L321)
+### [renderDeleteButton](../../src/client/project.ts#L309-L327)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -96,8 +96,8 @@ interface ProjectDetail {
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `#delete-project-btn` | click | L310-L319 | Confirms deletion, DELETEs project, redirects to projects page |
-| `.add-as-project-btn` (each) | click | L242 | Via `attachAddAsProjectHandlers` from common.ts |
+| `#delete-project-btn` | click | L316-L325 | Confirms deletion, DELETEs project, redirects to projects page |
+| `.add-as-project-btn` (each) | click | L246 | Via `attachAddAsProjectHandlers` from common.ts |
 
 ---
 
@@ -105,8 +105,8 @@ interface ProjectDetail {
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/projects/{projectId}` | init | L80 |
-| DELETE | `/api/projects/{projectId}` | deleteBtn click | L314 |
+| GET | `/api/projects/{projectId}` | init | L81 |
+| DELETE | `/api/projects/{projectId}` | deleteBtn click | L320 |
 | POST | `/api/projects` | attachAddAsProjectHandlers (common.ts) | -- |
 | POST | `/api/dependencies/{depId}/link` | attachAddAsProjectHandlers (common.ts) | -- |
 
@@ -150,7 +150,7 @@ interface ProjectDetail {
 
 ## [GAP] Ownership Badge Re-Auth URL
 
-L104: Manually constructs a re-auth link with `returnTo` query parameter: `/auth/github?returnTo=...`. This duplicates logic that could be in `renderOwnershipBadge` (common.ts only renders a generic `/auth/github` link).
+L105: Manually constructs a re-auth link with `returnTo` query parameter: `/auth/github?returnTo=...`. This duplicates logic that could be in `renderOwnershipBadge` (common.ts only renders a generic `/auth/github` link).
 
 ## [GAP] No Refresh Mechanism
 
@@ -158,6 +158,6 @@ After adding a dependency as a project (via `attachAddAsProjectHandlers`), the d
 
 ## [GAP] Failed Audit Links to `#`
 
-L265-L266: Failed audits link to `#`, providing no way to view failure details.
+L270-L271: Failed audits link to `#`, providing no way to view failure details.
 
 ## [REC] Unify re-auth URL logic in `renderOwnershipBadge`. Consider linking failed audits to the audit progress page so users can see the error message.

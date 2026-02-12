@@ -1,6 +1,6 @@
 # projects.ts -- Projects Browser Module
 
-**Source**: [`projects.ts`](../../src/client/projects.ts) (L1-L169)
+**Source**: [`projects.ts`](../../src/client/projects.ts#L1-L174)
 **HTML**: `public/projects.html`
 
 ---
@@ -11,7 +11,7 @@ Browse and filter all projects (public view) or user-owned projects ("My Project
 
 ---
 
-## Interfaces (L6-L30)
+## [Interfaces](../../src/client/projects.ts#L7-L31)
 
 ```ts
 interface BrowseProject {
@@ -29,7 +29,7 @@ interface BrowseResponse {
 
 ---
 
-## State Variables (L34-L52)
+## [State Variables](../../src/client/projects.ts#L35-L53)
 
 | Variable | Type | Description |
 |---|---|---|
@@ -40,7 +40,7 @@ interface BrowseResponse {
 
 ## Functions
 
-### loadProjects (L69-L113)
+### [loadProjects](../../src/client/projects.ts#L71-L116)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -52,13 +52,13 @@ interface BrowseResponse {
 - `severity` -- from severity dropdown (omitted if `'all'`)
 - `mine` -- `'true'` if My Projects checkbox checked
 
-### populateFilters (L116-L139)
+### [populateFilters](../../src/client/projects.ts#L119-L142)
 
 | Function | Signature | Description |
 |---|---|---|
 | `populateFilters` | `(filters: { categories: string[]; severities: string[] }) => void` | Populates `#category-filter` and `#severity-filter` dropdowns from API response. Preserves current selection. Only called once (`filtersPopulated` guard). |
 
-### renderProjectCard (L141-L166)
+### [renderProjectCard](../../src/client/projects.ts#L145-L170)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -70,10 +70,10 @@ interface BrowseResponse {
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `#search-input` | input | L54-L57 | Debounced `loadProjects()` with 300ms delay |
-| `#category-filter` | change | L58 | Immediate `loadProjects()` |
-| `#severity-filter` | change | L59 | Immediate `loadProjects()` |
-| `#mine-filter` (checkbox) | change | L62-L67 | Toggles `filter-active` class on label, calls `loadProjects()` |
+| `#search-input` | input | L55-L58 | Debounced `loadProjects()` with 300ms delay |
+| `#category-filter` | change | L59 | Immediate `loadProjects()` |
+| `#severity-filter` | change | L60 | Immediate `loadProjects()` |
+| `#mine-filter` (checkbox) | change | L63-L68 | Toggles `filter-active` class on label, calls `loadProjects()` |
 
 ---
 
@@ -81,7 +81,7 @@ interface BrowseResponse {
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/projects/browse?{params}` | loadProjects | L89 |
+| GET | `/api/projects/browse?{params}` | loadProjects | L91 |
 
 ---
 

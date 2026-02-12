@@ -54,7 +54,7 @@ Value: `'claude-opus-4-5-20251101'`
 
 Type: `Array<{ category: string; pattern: RegExp }>`
 
-34 patterns across 6 categories:
+28 patterns across 6 categories:
 
 | Category    | Patterns                                                                  |
 | ----------- | ------------------------------------------------------------------------- |
@@ -71,7 +71,7 @@ Type: `Array<{ category: string; pattern: RegExp }>`
 
 ### `runSecurityGreps()`
 
-[`runSecurityGreps()`](../../src/server/services/planning.ts) (L86-L147)
+[`runSecurityGreps()`](../../src/server/services/planning.ts#L88-L149)
 
 ```ts
 function runSecurityGreps(
@@ -94,7 +94,7 @@ function runSecurityGreps(
 
 ### `runPlanningCall()`
 
-[`runPlanningCall()`](../../src/server/services/planning.ts) (L151-L204)
+[`runPlanningCall()`](../../src/server/services/planning.ts#L154-L207)
 
 ```ts
 async function runPlanningCall(
@@ -124,7 +124,7 @@ async function runPlanningCall(
 
 ### `selectFilesByBudget()`
 
-[`selectFilesByBudget()`](../../src/server/services/planning.ts) (L208-L256)
+[`selectFilesByBudget()`](../../src/server/services/planning.ts#L212-L260)
 
 ```ts
 function selectFilesByBudget(
@@ -150,7 +150,7 @@ function selectFilesByBudget(
 
 ### `runPlanningPhase()`
 
-[`runPlanningPhase()`](../../src/server/services/planning.ts) (L260-L309)
+[`runPlanningPhase()`](../../src/server/services/planning.ts#L265-L314)
 
 ```ts
 async function runPlanningPhase(
@@ -182,7 +182,7 @@ async function runPlanningPhase(
 
 ## Database Operations
 
-Single update in `runPlanningPhase()` (L299-L302):
+Single update in `runPlanningPhase()` (L304-L307):
 
 ```sql
 UPDATE audits SET audit_plan = $1 WHERE id = $2
@@ -197,7 +197,7 @@ UPDATE audits SET audit_plan = $1 WHERE id = $2
 
 ## Cost Calculation
 
-Planning phase cost (L305-L306):
+Planning phase cost (L310-L311):
 
 ```
 planningCostUsd = (inputTokens / 1_000_000) * 5 + (outputTokens / 1_000_000) * 25

@@ -10,7 +10,7 @@ Wraps the Anthropic SDK to provide retry-aware API calls for message creation an
 
 ## Types
 
-### `ClaudeResponse` (lines 5-9)
+### `ClaudeResponse` (lines 6-10)
 
 ```ts
 export interface ClaudeResponse {
@@ -26,18 +26,18 @@ export interface ClaudeResponse {
 
 | Name | Value | Line |
 |------|-------|------|
-| `MAX_RETRIES` | `5` | 13 |
-| Default model | `claude-opus-4-5-20251101` | 46, 108 |
-| Default `maxTokens` | `16384` | 47 |
-| Default Retry-After fallback | `60` seconds | 32 |
-| Rate-limit buffer | `+5` seconds added to Retry-After | 82, 130 |
-| Server-error backoff | `min(10 * 2^attempt, 120)` seconds | 85, 131 |
+| `MAX_RETRIES` | `5` | 14 |
+| Default model | `claude-opus-4-5-20251101` | 48, 111 |
+| Default `maxTokens` | `16384` | 49 |
+| Default Retry-After fallback | `60` seconds | 33 |
+| Rate-limit buffer | `+5` seconds added to Retry-After | 84, 133 |
+| Server-error backoff | `min(10 * 2^attempt, 120)` seconds | 87, 134 |
 
-### `sleep(ms)` (line 15)
+### `sleep(ms)` (line 16)
 
 Returns a `Promise<void>` that resolves after `ms` milliseconds.
 
-### `getRetryAfterSeconds(err)` (lines 19-33)
+### `getRetryAfterSeconds(err)` (lines 20-34)
 
 Extracts the `Retry-After` header from an error object. Tries `headers.get('retry-after')` (Web API Headers) then bracket notation. Returns the parsed integer if positive, otherwise falls back to `60`.
 
@@ -45,7 +45,7 @@ Extracts the `Retry-After` header from an error object. Tries `headers.get('retr
 
 ## Exported Functions
 
-### `callClaude` (lines 42-98)
+### `callClaude` (lines 44-100)
 
 ```ts
 export async function callClaude(
@@ -64,7 +64,7 @@ export async function callClaude(
 3. Concatenates all `text`-type content blocks into `ClaudeResponse.content`.
 4. Returns token usage from `response.usage`.
 
-**Retry logic (lines 52-94):**
+**Retry logic (lines 54-96):**
 
 - Loop: `attempt` from `0` to `MAX_RETRIES` (6 total attempts).
 - Retries on HTTP `429` (rate limit) and `5xx` (server error).
@@ -72,13 +72,13 @@ export async function callClaude(
 - Server error wait: exponential backoff `min(10 * 2^attempt, 120)` s.
 - Logs each retry to `console.log` with status, wait time, and attempt number.
 - Non-retryable errors or final attempt: rethrows the original error.
-- Unreachable fallback at line 97 throws `Error('Exhausted all retries calling Claude API')`.
+- Unreachable fallback at line 99 throws `Error('Exhausted all retries calling Claude API')`.
 
 **Security:** API key is passed per-call and never stored. [GAP] No validation that `apiKey` is non-empty before creating the client.
 
 ---
 
-### `countTokens` (lines 104-142)
+### `countTokens` (lines 107-145)
 
 ```ts
 export async function countTokens(
@@ -94,13 +94,13 @@ export async function countTokens(
 1. Calls `client.messages.countTokens()` -- Anthropic's free token-counting endpoint.
 2. Returns `result.input_tokens`.
 
-**Retry logic (lines 112-138):** Identical structure to `callClaude` -- same conditions, same backoff, same `MAX_RETRIES`. Log prefix is `[countTokens]`.
+**Retry logic (lines 115-141):** Identical structure to `callClaude` -- same conditions, same backoff, same `MAX_RETRIES`. Log prefix is `[countTokens]`.
 
-**Note from JSDoc (line 102):** Intended to use a service key (`ANTHROPIC_SERVICE_KEY`), but the signature accepts `apiKey` as a plain parameter. [GAP] The comment says "service key" but the caller is responsible for passing the correct key; nothing enforces this distinction.
+**Note from JSDoc (lines 102-104):** Intended to use a service key (`ANTHROPIC_SERVICE_KEY`), but the signature accepts `apiKey` as a plain parameter. [GAP] The comment says "service key" but the caller is responsible for passing the correct key; nothing enforces this distinction.
 
 ---
 
-### `parseJsonResponse<T>` (lines 148-186)
+### `parseJsonResponse<T>` (lines 152-190)
 
 ```ts
 export function parseJsonResponse<T>(content: string): T
@@ -110,12 +110,12 @@ export function parseJsonResponse<T>(content: string): T
 
 | Stage | Lines | Strategy |
 |-------|-------|----------|
-| 1 | 152-154 | Direct `JSON.parse` on trimmed input |
-| 2 | 157-161 | Strip markdown code fences (` ```json ` or ` ``` `) and parse inner content |
-| 3 | 165-170 | Find outermost `{ ... }` by first/last brace and parse |
-| 4 | 173-179 | Find outermost `[ ... ]` by first/last bracket and parse |
+| 1 | 155-158 | Direct `JSON.parse` on trimmed input |
+| 2 | 160-166 | Strip markdown code fences (` ```json ` or ` ``` `) and parse inner content |
+| 3 | 168-175 | Find outermost `{ ... }` by first/last brace and parse |
+| 4 | 177-184 | Find outermost `[ ... ]` by first/last bracket and parse |
 
-If all stages fail, throws `SyntaxError` with the first 120 characters of input for debugging (line 183).
+If all stages fail, throws `SyntaxError` with the first 120 characters of input for debugging (line 187).
 
 [GAP] The generic `<T>` is unchecked at runtime -- the parsed JSON is cast without schema validation. Callers must trust Claude's output shape.
 

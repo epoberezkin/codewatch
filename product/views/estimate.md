@@ -16,6 +16,8 @@ Configure and start a security audit with full cost transparency. The page loads
 - **Outbound:** On audit start, redirects to `/audit.html?auditId=<id>`.
 - **Guard:** If `projectId` query param is missing, immediately redirects to `/`.
 
+**Related spec:** [client/estimate.md](../../spec/client/estimate.md), [services/tokens.md](../../spec/services/tokens.md), [api.md](../../spec/api.md)
+
 ---
 
 ## Sections
@@ -196,7 +198,7 @@ Shown after project data loads. Logic:
 |---|---|
 | `ownership.isOwner` | `notice-info`: "**Full access** -- you'll see complete findings as the project owner." |
 | `ownership.needsReauth` | `notice-info`: "**Ownership unverified** -- re-authenticate with GitHub to verify org ownership and get full access." (with link) |
-| User logged in but not owner | `notice-warn` (`#non-owner-notice`): Explains redaction policy -- medium+ findings shown as severity counts only, time-gated (3mo medium/high, 6mo critical). Also shows `notice-info`: "**Redacted access** -- medium and above findings will show severity counts only." |
+| User logged in but not owner | `notice-warn` (`#non-owner-notice`): Explains redaction policy -- medium+ findings are redacted (severity, CWE, repo, and status visible; all other fields null), time-gated (3mo medium/high, 6mo critical). Also shows `notice-info`: "**Redacted access** -- medium and above findings will be partially redacted." |
 | User not logged in | Nothing shown |
 
 [GAP] Access tier preview is rendered on page load but placed inside `#step-3` which is hidden until a level is selected. The ownership badge in the header is the only early indicator. Users may not see the access tier warning until they've already invested time in component analysis.

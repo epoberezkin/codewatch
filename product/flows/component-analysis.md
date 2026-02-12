@@ -280,6 +280,8 @@ sequenceDiagram
     Server-->>User: Updated cost estimates
 ```
 
+**Related spec:** [services/componentAnalysis.md](../../spec/services/componentAnalysis.md), [api.md](../../spec/api.md), [database.md](../../spec/database.md)
+
 ## Key Files
 
 | File | Purpose |

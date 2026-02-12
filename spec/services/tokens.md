@@ -63,7 +63,7 @@ Row shape returned from the `model_pricing` database table. Not exported.
 export const SECURITY_CRITICAL_PATTERNS: RegExp[]
 ```
 
-18 case-insensitive regexes matching security-sensitive path segments (e.g. `auth`, `crypto`, `api`, `middleware`, `token`, `password`, `permission`, `validat`, `saniti`). Used externally to prioritize files for thorough-mode scanning.
+19 case-insensitive regexes matching security-sensitive path segments (e.g. `auth`, `crypto`, `api`, `middleware`, `token`, `password`, `permission`, `validat`, `saniti`). Used externally to prioritize files for thorough-mode scanning.
 
 [GAP] No function in this module consumes `SECURITY_CRITICAL_PATTERNS`; it is exported for use elsewhere but the consuming call-site is not documented here.
 

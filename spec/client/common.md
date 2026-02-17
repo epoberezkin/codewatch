@@ -1,6 +1,6 @@
 # common.ts -- Shared Client Utilities
 
-**Source**: [`common.ts`](../../src/client/common.ts#L1-L381)
+**Source**: [`common.ts`](../../src/client/common.ts#L1-L435)
 
 All exports are global functions/variables (no ES module exports). Loaded by every HTML page.
 
@@ -92,7 +92,15 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L243-L285)
+## [Shared Renderer: renderThreatModel](../../src/client/common.ts#L243-L296)
+
+| Function | Signature | Description |
+|---|---|---|
+| `renderThreatModel` | `(targetId: string, data: { threatModel?, threatModelParties?, threatModelFileLinks?, threatModelSource? }) => boolean` | Renders threat model display into the element with `targetId`. Returns `true` if content was rendered, `false` if no threat content present. Display order: source badge → evaluation text → source file links (filtered by `url.startsWith('https://')`) → parties table. Used by both `project.ts` and `report.ts`. |
+
+---
+
+## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L298-L340)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -106,14 +114,14 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Auth State](../../src/client/common.ts#L287-L353)
+## [Auth State](../../src/client/common.ts#L341-L407)
 
-### [Interface: `AuthUser`](../../src/client/common.ts#L289-L294)
+### [Interface: `AuthUser`](../../src/client/common.ts#L343-L348)
 ```ts
 interface AuthUser { id: string; username: string; avatarUrl?: string; githubType: string }
 ```
 
-### [Variables](../../src/client/common.ts#L296-L297)
+### [Variables](../../src/client/common.ts#L350-L351)
 | Variable | Type | Description |
 |---|---|---|
 | `currentUser` | `AuthUser \| null` | Populated by `checkAuth()`. Readable by all page modules. |
@@ -135,7 +143,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## [Navigation](../../src/client/common.ts#L355-L371)
+## [Navigation](../../src/client/common.ts#L409-L425)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -146,7 +154,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## [Init Sequence](../../src/client/common.ts#L373-L381)
+## [Init Sequence](../../src/client/common.ts#L427-L435)
 
 ```ts
 document.addEventListener('DOMContentLoaded', async () => {

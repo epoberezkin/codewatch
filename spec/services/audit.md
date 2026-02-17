@@ -361,8 +361,9 @@ async function classifyProject(
 - User message: rendered from `classify` prompt template with `repo_list` containing directory trees and READMEs (truncated to 5000 chars each) for all repos.
 
 **Database writes:**
-- `UPDATE projects SET category, description, involved_parties, threat_model, threat_model_source, classification_audit_id` (lines 723-741)
+- `UPDATE projects SET category, description, involved_parties, threat_model, threat_model_source, threat_model_files, classification_audit_id` (lines 723-742)
 - `threat_model_source` is `'repo'` if found in repo files, `'generated'` otherwise.
+- `threat_model_files` stores the string array from `classification.threat_model_files` (file paths prefixed with repo name, e.g., `"repo-name/SECURITY.md"`).
 
 ---
 
@@ -455,7 +456,7 @@ Based on Claude Opus 4.5 pricing: $5/Mtok input, $25/Mtok output.
 | `audit_commits` | INSERT ... ON CONFLICT DO UPDATE | 0 |
 | `audit_findings` | INSERT (new findings), INSERT (inherited findings), UPDATE (component_id, resolved_in_audit_id) | 2b, 3, 3b |
 | `audit_components` | INSERT ... ON CONFLICT DO UPDATE | 3b |
-| `projects` | UPDATE (category, description, involved_parties, threat_model, threat_model_source, classification_audit_id) | 1 |
+| `projects` | UPDATE (category, description, involved_parties, threat_model, threat_model_source, threat_model_files, classification_audit_id) | 1 |
 
 ### Tables Read
 

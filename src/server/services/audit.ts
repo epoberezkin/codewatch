@@ -727,14 +727,16 @@ async function classifyProject(
       involved_parties = $3,
       threat_model = $4,
       threat_model_source = $5,
-      classification_audit_id = $6
-     WHERE id = $7`,
+      threat_model_files = $6,
+      classification_audit_id = $7
+     WHERE id = $8`,
     [
       classification.category,
       classification.description,
       JSON.stringify(classification.involved_parties),
       classification.threat_model?.generated || JSON.stringify(classification.threat_model),
       classification.threat_model_found ? 'repo' : 'generated',
+      classification.threat_model_files || [],
       auditId,
       projectId,
     ]

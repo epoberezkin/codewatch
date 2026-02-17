@@ -68,7 +68,7 @@ Product concepts referenced below are drawn from the [Capability Map](../product
 
 | File Type | Files | Affects | Risk |
 |-----------|-------|---------|------|
-| SQL migrations | `sql/001_initial.sql`, `sql/002_ownership_and_components.sql`, `sql/003_branch_selection.sql`, `sql/004_schema_fixes.sql` | Database schema -- ALL features depend on correct table structure, constraints, and indexes | **High** |
+| SQL migrations | `sql/001_initial.sql`, `sql/002_ownership_and_components.sql`, `sql/003_branch_selection.sql`, `sql/004_schema_fixes.sql`, `sql/005_threat_model_files.sql` | Database schema -- ALL features depend on correct table structure, constraints, and indexes | **High** |
 | Prompt templates | `prompts/system.md`, `prompts/classify.md`, `prompts/full.md`, `prompts/thorough.md`, `prompts/opportunistic.md`, `prompts/synthesize.md`, `prompts/planning.md`, `prompts/component_analysis.md` | Audit quality, classification accuracy, planning quality, component analysis depth -- prompts are the "instructions" to Claude | **Medium** |
 | CSS | `public/css/style.css` | All views -- visual rendering, layout, theming | **Low** |
 | HTML | `public/index.html` | Home view -- structure/layout | **Low** |

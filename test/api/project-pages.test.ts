@@ -454,15 +454,21 @@ describe('Project Pages', () => {
       const session = await createTestSession(ctx.pool);
       const projId = await createProject(session);
 
-      // Set threat model data
+      // Set threat model data matching prompt shape
       const involvedParties = {
-        vendor: { can: 'Access servers', cannot: 'Read messages' },
-        users: { can: 'Send messages', cannot: 'Impersonate others' },
+        vendor: 'test-org',
+        operators: ['server operators'],
+        end_users: ['web users'],
+        networks: [],
       };
+      const threatModelJson = JSON.stringify({
+        evaluation: 'Security assessment text',
+        parties: [{ name: 'vendor', can: ['Access servers'], cannot: ['Read messages'] }],
+      });
       await ctx.pool.query(
         `UPDATE projects SET category = 'library', threat_model = $1, threat_model_source = 'repo',
          involved_parties = $2 WHERE id = $3`,
-        ['Security assessment text', JSON.stringify(involvedParties), projId]
+        [threatModelJson, JSON.stringify(involvedParties), projId]
       );
 
       const res = await fetch(`${ctx.baseUrl}/api/projects/${projId}`);
@@ -473,7 +479,103 @@ describe('Project Pages', () => {
       expect(project.threatModel).toBe('Security assessment text');
       expect(project.threatModelSource).toBe('repo');
       expect(project.involvedParties).toBeDefined();
-      expect(project.involvedParties.vendor.can).toBe('Access servers');
+      expect(project.involvedParties.vendor).toBe('test-org');
+      expect(project.threatModelParties).toBeDefined();
+      expect(project.threatModelParties[0].name).toBe('vendor');
+      expect(project.threatModelParties[0].can[0]).toBe('Access servers');
+      expect(project.threatModelFileLinks).toEqual([]);
+    });
+
+    it('returns threatModelFileLinks when threat_model_files and classification_audit_id are set', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+
+      // Insert an audit with commits to serve as classification audit
+      const auditId = await insertAudit(projId, session.userId);
+
+      // Get repo id for audit_commits
+      const { rows: repos } = await ctx.pool.query(
+        'SELECT id, repo_name FROM repositories WHERE project_id = $1 LIMIT 1',
+        [projId]
+      );
+      const repoId = repos[0].id;
+      const repoName = repos[0].repo_name;
+
+      // Insert audit commit
+      await ctx.pool.query(
+        `INSERT INTO audit_commits (audit_id, repo_id, commit_sha, branch)
+         VALUES ($1, $2, 'deadbeef1234567890', 'main')`,
+        [auditId, repoId]
+      );
+
+      // Set threat_model_files and classification_audit_id
+      await ctx.pool.query(
+        `UPDATE projects SET category = 'library', threat_model = 'Some assessment',
+         threat_model_source = 'repo', threat_model_files = $1,
+         classification_audit_id = $2 WHERE id = $3`,
+        [[`${repoName}/SECURITY.md`, `${repoName}/docs/threat-model.md`], auditId, projId]
+      );
+
+      const res = await fetch(`${ctx.baseUrl}/api/projects/${projId}`);
+      const project = await res.json();
+
+      expect(project.threatModelFileLinks).toHaveLength(2);
+      expect(project.threatModelFileLinks[0].path).toBe(`${repoName}/SECURITY.md`);
+      expect(project.threatModelFileLinks[0].url).toContain('/blob/deadbeef1234567890/SECURITY.md');
+      expect(project.threatModelFileLinks[0].url.startsWith('https://')).toBe(true);
+      expect(project.threatModelFileLinks[1].path).toBe(`${repoName}/docs/threat-model.md`);
+      expect(project.threatModelFileLinks[1].url).toContain('/blob/deadbeef1234567890/docs/threat-model.md');
+    });
+
+    it('buildThreatModelFileLinks sanitizes path traversal and absolute paths', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+      const auditId = await insertAudit(projId, session.userId);
+
+      const { rows: repos } = await ctx.pool.query(
+        'SELECT id, repo_name FROM repositories WHERE project_id = $1 LIMIT 1',
+        [projId]
+      );
+
+      await ctx.pool.query(
+        `INSERT INTO audit_commits (audit_id, repo_id, commit_sha, branch)
+         VALUES ($1, $2, 'abc123', 'main')`,
+        [auditId, repos[0].id]
+      );
+
+      // Set malicious file paths — these should be filtered out
+      await ctx.pool.query(
+        `UPDATE projects SET category = 'library', threat_model = 'test',
+         threat_model_source = 'generated',
+         threat_model_files = $1, classification_audit_id = $2 WHERE id = $3`,
+        [['../../../etc/passwd', '/etc/shadow', `${repos[0].repo_name}/valid-file.md`], auditId, projId]
+      );
+
+      const res = await fetch(`${ctx.baseUrl}/api/projects/${projId}`);
+      const project = await res.json();
+
+      // Only the valid file should remain
+      expect(project.threatModelFileLinks).toHaveLength(1);
+      expect(project.threatModelFileLinks[0].path).toBe(`${repos[0].repo_name}/valid-file.md`);
+    });
+
+    it('parseThreatModel handles plain text (non-JSON) threat model', async () => {
+      const session = await createTestSession(ctx.pool);
+      const projId = await createProject(session);
+
+      // Set threat_model as plain text (not JSON)
+      await ctx.pool.query(
+        `UPDATE projects SET category = 'library',
+         threat_model = 'This is a plain text threat model assessment.',
+         threat_model_source = 'generated' WHERE id = $1`,
+        [projId]
+      );
+
+      const res = await fetch(`${ctx.baseUrl}/api/projects/${projId}`);
+      const project = await res.json();
+
+      expect(project.threatModel).toBe('This is a plain text threat model assessment.');
+      expect(project.threatModelParties).toEqual([]);
     });
 
     it('returns 404 for nonexistent project', async () => {

@@ -23,6 +23,7 @@ CodeWatch uses PostgreSQL with the `pgcrypto` extension for UUID generation (`ge
 | [002_ownership_and_components.sql](../sql/002_ownership_and_components.sql) | `sessions.has_org_scope`, ownership_cache, components, component_analyses, audit_components, project_dependencies. Adds columns to audit_findings, projects, audits. Expands audit status with `planning`. |
 | [003_branch_selection.sql](../sql/003_branch_selection.sql) | `project_repos.branch` column for per-project branch overrides. |
 | [004_schema_fixes.sql](../sql/004_schema_fixes.sql) | FK cascade fixes (`ON DELETE SET NULL`, `ON DELETE CASCADE`), new indexes, self-reference CHECK on project_dependencies, adds `completed_with_warnings` to audit status. |
+| [005_threat_model_files.sql](../sql/005_threat_model_files.sql) | `projects.threat_model_files TEXT[]` column for storing classification threat model file paths. |
 
 ### Internal Migration Table
 
@@ -105,6 +106,7 @@ Created by `db.ts`, not by any SQL migration file.
 | `created_at` | `TIMESTAMPTZ` | — | `NOW()` | 001 |
 | `component_analysis_id` | `UUID` | FK -> `component_analyses(id)` `ON DELETE SET NULL` | — | 002 (FK fix in 004) |
 | `components_analyzed_at` | `TIMESTAMPTZ` | — | — | 002 |
+| `threat_model_files` | `TEXT[]` | — | `'{}'` | 005 |
 
 **CHECK constraints**:
 - `category IN ('library', 'cli_tool', 'build_dependency', 'gui_client', 'client_server', 'decentralized_serverless', 'decentralized_client_server')`

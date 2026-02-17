@@ -120,11 +120,9 @@ After 5 consecutive poll errors, the user must manually refresh the page.
 
 ## UI: Information Display
 
-### GAP: Threat model truncated without indication
+### ~~GAP: Threat model truncated without indication~~ (RESOLVED)
 **Source:** [project.md](views/project.md), [report.md](views/report.md)
-Threat model text is truncated to 2000 characters client-side with no indication to the user.
-
-**REC:** Add a "Show full threat model" toggle or truncation indicator.
+**Fixed:** Threat model text is no longer truncated. The API now parses the stored threat model into structured fields (`threatModel`, `threatModelParties`, `threatModelFileLinks`) and sends them in full. Client renders all fields without truncation.
 
 ### GAP: Component descriptions and security profiles truncated without indication
 **Source:** [project.md](views/project.md)

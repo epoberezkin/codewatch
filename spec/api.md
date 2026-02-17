@@ -65,6 +65,36 @@ Returns the set of severity levels whose finding details should be redacted for 
 
 [REC] Either remove `getRedactedSeverities` or refactor the report/findings endpoints to use it, keeping the source of truth in one place.
 
+### `parseThreatModel` (L75)
+
+Parses the `threat_model` TEXT column (which may contain plain text or a JSON string) into structured fields.
+
+```ts
+function parseThreatModel(raw: string | null): {
+  text: string | null;
+  parties: Array<{name: string; can: string[]; cannot: string[]}>
+}
+```
+
+- If `raw` is null/empty: returns `{ text: null, parties: [] }`
+- If `raw` is valid JSON with `evaluation`/`generated` and `parties`: extracts structured fields
+- If `raw` is plain text (JSON parse fails): returns `{ text: raw, parties: [] }`
+
+### `buildThreatModelFileLinks` (L92)
+
+Constructs GitHub blob URLs from stored `threat_model_files` paths and classification audit commit data. File paths from Claude are prefixed with repo name (e.g., `"repo-name/SECURITY.md"`); the helper strips the prefix and matches by repo name.
+
+```ts
+function buildThreatModelFileLinks(
+  threatModelFiles: string[] | null,
+  commits: Array<{repo_url: string; repo_name: string; commit_sha: string}>
+): Array<{path: string; url: string}>
+```
+
+**Sanitization**: Rejects paths containing `..` or starting with `/`. URLs are constructed from stored `repo_url` (always `https://github.com/...`).
+
+**Backwards compatibility note**: The `threat_model` TEXT column may contain either plain text or a JSON string. API consumers MUST handle both. Future schema extensions to classification data MUST be backwards-compatible with existing stored data.
+
 ---
 
 ## 1. GitHub Integration
@@ -150,10 +180,10 @@ Fetches full project details including repos, components, dependencies, and last
 |---|---|
 | **Auth** | Optional. Determines audit visibility and ownership badge. |
 | **Path params** | `id` - project UUID |
-| **Response (200)** | `{ id, name, description, githubOrg, category, license, involvedParties, threatModel, threatModelSource, totalFiles, totalTokens, createdBy, creatorUsername, ownership, repos[], components[], dependencies[], audits[], createdAt }` |
+| **Response (200)** | `{ id, name, description, githubOrg, category, license, involvedParties, threatModel, threatModelParties, threatModelFileLinks, threatModelSource, totalFiles, totalTokens, createdBy, creatorUsername, ownership, repos[], components[], dependencies[], audits[], createdAt }` |
 | **Response (404)** | `{ error: 'Project not found' }` |
 | **Response (500)** | `{ error }` |
-| **DB reads** | `projects`, `users`, `repositories`, `project_repos`, `components`, `project_dependencies`, `audits`, `audit_findings` |
+| **DB reads** | `projects`, `users`, `repositories`, `project_repos`, `components`, `project_dependencies`, `audits`, `audit_findings`, `audit_commits` (for threat model file links) |
 | **Business logic** | Audit visibility: owner sees all, authenticated non-owner sees public + own, anonymous sees public only. Limit 10 audits. License aggregated from repo records. Severity counts computed per audit. |
 
 ### PUT /api/projects/:id/branches (L615)
@@ -285,7 +315,7 @@ Full audit report with three-tier access control.
 |---|---|
 | **Auth** | Optional. Determines access tier. |
 | **Path params** | `id` - audit UUID |
-| **Response (200)** | `{ id, projectId, projectName, auditLevel, isIncremental, isOwner, isRequester, isPublic, publishableAfter, ownerNotified, ownerNotifiedAt, maxSeverity, category, projectDescription, involvedParties, threatModel, threatModelSource, commits[], reportSummary, severityCounts, findings[], redactedSeverities, redactionNotice, accessTier, componentBreakdown[], dependencies[], createdAt, completedAt }` |
+| **Response (200)** | `{ id, projectId, projectName, auditLevel, isIncremental, isOwner, isRequester, isPublic, publishableAfter, ownerNotified, ownerNotifiedAt, maxSeverity, category, projectDescription, involvedParties, threatModel, threatModelParties, threatModelFileLinks, threatModelSource, commits[], reportSummary, severityCounts, findings[], redactedSeverities, redactionNotice, accessTier, componentBreakdown[], dependencies[], createdAt, completedAt }` |
 | **Response (404)** | Audit not found |
 | **Response (500)** | `{ error }` |
 | **DB reads** | `audits`, `projects`, `audit_commits`, `repositories`, `audit_findings`, `audit_components`, `components`, `project_dependencies` |

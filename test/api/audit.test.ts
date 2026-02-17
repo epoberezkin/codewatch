@@ -535,6 +535,9 @@ describe('Audit API', () => {
       expect(report.involvedParties).toBeDefined();
       expect(report.involvedParties.vendor).toBe('test-org');
       expect(report.involvedParties.operators).toContain('server operators');
+      // Mock has generated truthy — parties lost in storage (known limitation)
+      expect(report.threatModelParties).toEqual([]);
+      expect(report.threatModelFileLinks).toEqual([]);
     });
 
     it('report includes threatModel and threatModelSource from classification', async () => {

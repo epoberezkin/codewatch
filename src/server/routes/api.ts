@@ -72,6 +72,42 @@ function getRedactedSeverities(tier: AccessTier): Set<string> {
   return new Set(['critical', 'high']);
 }
 
+// Spec: spec/api.md#parseThreatModel
+function parseThreatModel(raw: string | null): {
+  text: string | null;
+  parties: Array<{name: string; can: string[]; cannot: string[]}>
+} {
+  if (!raw) return { text: null, parties: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null) {
+      const text = parsed.evaluation || parsed.generated || null;
+      const parties = Array.isArray(parsed.parties) ? parsed.parties : [];
+      return { text, parties };
+    }
+  } catch { /* not JSON — treat as plain text */ }
+  return { text: raw, parties: [] };
+}
+
+// Spec: spec/api.md#buildThreatModelFileLinks
+function buildThreatModelFileLinks(
+  threatModelFiles: string[] | null,
+  commits: Array<{repo_url: string; repo_name: string; commit_sha: string}>
+): Array<{path: string; url: string}> {
+  if (!threatModelFiles?.length || !commits.length) return [];
+  return threatModelFiles
+    .filter(f => f && !f.includes('..') && !f.startsWith('/'))
+    .map(filePath => {
+      // File paths from Claude are prefixed with repo name: "repo-name/path/to/file"
+      const slashIdx = filePath.indexOf('/');
+      const repoPrefix = slashIdx > 0 ? filePath.substring(0, slashIdx) : '';
+      const fileInRepo = slashIdx > 0 ? filePath.substring(slashIdx + 1) : filePath;
+      const commit = commits.find(c => c.repo_name === repoPrefix) || commits[0];
+      const url = `${commit.repo_url}/blob/${commit.commit_sha}/${encodeURI(fileInRepo)}`;
+      return { path: filePath, url };
+    });
+}
+
 // ============================================================
 // GitHub Org Repos
 // ============================================================
@@ -552,6 +588,21 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
       };
     }));
 
+    // Parse threat model and build file links
+    const tm = parseThreatModel(project.threat_model);
+    let classificationCommits: Array<{repo_url: string; repo_name: string; commit_sha: string}> = [];
+    if (project.classification_audit_id && project.threat_model_files?.length) {
+      const { rows: commitRows } = await pool.query(
+        `SELECT r.repo_url, r.repo_name, ac.commit_sha
+         FROM audit_commits ac
+         JOIN repositories r ON r.id = ac.repo_id
+         WHERE ac.audit_id = $1`,
+        [project.classification_audit_id]
+      );
+      classificationCommits = commitRows;
+    }
+    const threatModelFileLinks = buildThreatModelFileLinks(project.threat_model_files, classificationCommits);
+
     res.json({
       id: project.id,
       name: project.name,
@@ -559,9 +610,11 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
       githubOrg: project.github_org,
       category: project.category,
       license,
-      involvedParties: project.involved_parties,
-      threatModel: project.threat_model,
-      threatModelSource: project.threat_model_source,
+      involvedParties: project.involved_parties || null,
+      threatModel: tm.text,
+      threatModelParties: tm.parties,
+      threatModelFileLinks,
+      threatModelSource: project.threat_model_source || null,
       totalFiles: project.total_files,
       totalTokens: project.total_tokens,
       createdBy: project.created_by,
@@ -1273,7 +1326,8 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
     const { rows } = await pool.query(
       `SELECT a.*, p.name as project_name, p.created_by as project_owner_id,
               p.category as project_category, p.description as project_description,
-              p.involved_parties, p.threat_model, p.threat_model_source
+              p.involved_parties, p.threat_model, p.threat_model_source,
+              p.threat_model_files, p.classification_audit_id
        FROM audits a
        JOIN projects p ON p.id = a.project_id
        WHERE a.id = $1`,
@@ -1438,6 +1492,21 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
       [audit.project_id]
     );
 
+    // Parse threat model and build file links for classification audit
+    const reportTm = parseThreatModel(audit.threat_model);
+    let reportClassCommits: Array<{repo_url: string; repo_name: string; commit_sha: string}> = [];
+    if (audit.classification_audit_id && audit.threat_model_files?.length) {
+      const { rows: ccRows } = await pool.query(
+        `SELECT r.repo_url, r.repo_name, ac.commit_sha
+         FROM audit_commits ac
+         JOIN repositories r ON r.id = ac.repo_id
+         WHERE ac.audit_id = $1`,
+        [audit.classification_audit_id]
+      );
+      reportClassCommits = ccRows;
+    }
+    const reportThreatModelFileLinks = buildThreatModelFileLinks(audit.threat_model_files, reportClassCommits);
+
     res.json({
       id: audit.id,
       projectId: audit.project_id,
@@ -1455,7 +1524,9 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
       category: audit.project_category || null,
       projectDescription: audit.project_description || null,
       involvedParties: audit.involved_parties || null,
-      threatModel: audit.threat_model || null,
+      threatModel: reportTm.text,
+      threatModelParties: reportTm.parties,
+      threatModelFileLinks: reportThreatModelFileLinks,
       threatModelSource: audit.threat_model_source || null,
       commits: commits.map(c => ({ repoName: c.repo_name, commitSha: c.commit_sha })),
       reportSummary: audit.report_summary,

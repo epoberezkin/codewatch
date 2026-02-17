@@ -495,7 +495,9 @@ describe('Project Pages', () => {
 
       // Get repo id for audit_commits
       const { rows: repos } = await ctx.pool.query(
-        'SELECT id, repo_name FROM repositories WHERE project_id = $1 LIMIT 1',
+        `SELECT r.id, r.repo_name FROM repositories r
+         JOIN project_repos pr ON pr.repo_id = r.id
+         WHERE pr.project_id = $1 LIMIT 1`,
         [projId]
       );
       const repoId = repos[0].id;
@@ -533,7 +535,9 @@ describe('Project Pages', () => {
       const auditId = await insertAudit(projId, session.userId);
 
       const { rows: repos } = await ctx.pool.query(
-        'SELECT id, repo_name FROM repositories WHERE project_id = $1 LIMIT 1',
+        `SELECT r.id, r.repo_name FROM repositories r
+         JOIN project_repos pr ON pr.repo_id = r.id
+         WHERE pr.project_id = $1 LIMIT 1`,
         [projId]
       );
 

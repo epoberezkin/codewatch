@@ -39,7 +39,7 @@ Product concepts referenced below are drawn from the [Capability Map](../product
 | `config.ts` | ALL (startup) | **Low** | Static env-var reader -- changes only affect deployment; no runtime logic |
 | `db.ts` | ALL (data access) | **High** | Singleton `pg.Pool` + `runMigrations()`; pool failure = total outage; migration bugs corrupt schema |
 | `migrate.ts` | ALL (schema) | **Medium** | Standalone migration runner; only used at deploy time, but errors block startup |
-| `middleware/gate.ts` | PC18 Pre-Launch Gate | **Medium** | Password gate protecting non-static routes; bug could lock out all users or expose pre-launch site |
+| `middleware/gate.ts` | PC18 Pre-Launch Gate | **Medium** | Password gate protecting all routes (bypasses health check, gate page, static asset extensions); bug could lock out all users or expose pre-launch site |
 | `routes/api.ts` | PC1-PC15, PC17, PC19 | **High** | ALL `/api/*` endpoints; largest file, highest blast radius; every product feature except OAuth and gate passes through here |
 | `routes/auth.ts` | PC16 GitHub OAuth, PC17 Ownership Verification | **High** | OAuth flow + `requireAuth` middleware; breakage locks out all authenticated features |
 | `services/audit.ts` | PC7 Audit Levels, PC8 Incremental Audits, PC9 Real-Time Progress, PC11 Findings Management, PC12 Report Sections | **High** | Core audit engine -- orchestrates classification, batching, analysis, synthesis; changes affect all audit outputs |

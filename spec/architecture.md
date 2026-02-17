@@ -21,9 +21,9 @@ index.ts
   -> initPool(), runMigrations()
   -> createApp()
        -> express.json(), cookieParser()
-       -> express.static(public/)
        -> POST /gate  (gateHandler)
        -> gateMiddleware
+       -> express.static(public/)
        -> GET /api/health
        -> /auth  (routes/auth.ts)
        -> /api   (routes/api.ts)
@@ -31,11 +31,11 @@ index.ts
 ```
 
 - **Entry point** (`index.ts`): Initialises the database pool, runs migrations, creates the Express app, and starts listening.
-- **App factory** (`app.ts`): Assembles middleware (JSON body parser, cookie parser, static files, gate) and mounts route modules.
+- **App factory** (`app.ts`): Assembles middleware (JSON body parser, cookie parser, gate, static files) and mounts route modules.
 - **Routes** (`routes/api.ts`, `routes/auth.ts`): Map HTTP endpoints to service calls. `api.ts` handles all `/api/*` endpoints; `auth.ts` handles GitHub OAuth flow under `/auth/*`.
 - **Services** (`services/*.ts`): Stateless business-logic modules consumed by routes. Each service owns one domain concern.
 - **Database** (`db.ts`): Exposes a singleton `pg.Pool` and a `runMigrations()` function that applies `sql/*.sql` files in order.
-- **Middleware** (`middleware/gate.ts`): Pre-launch password gate protecting non-static routes.
+- **Middleware** (`middleware/gate.ts`): Pre-launch password gate; runs before static file serving, bypasses health check, gate page, and static asset extensions.
 
 ### Client
 

@@ -31,15 +31,11 @@ Password-protect the entire site during pre-launch testing. When the `GATE_PASSW
 
 ## What It Protects
 
-The gate middleware runs **after** `express.static`, so:
+The gate middleware runs **before** `express.static`, so all requests pass through the gate first:
 
-- **Unprotected**: All static assets in `/public` (HTML pages, CSS, JS, images, logos, favicon) and `POST /gate` itself.
-- **Protected**: All API routes (`/api/*` except `/api/health`), auth routes (`/auth/*`), and any server-rendered responses.
-- **Explicitly bypassed**: `GET /api/health` (health check for uptime monitors).
-
-[GAP] Static HTML files (including `/gate.html` itself and all other `.html` pages) are served by `express.static` **before** the gate middleware. This means an unauthenticated user can directly load any HTML page -- they just cannot fetch API data. The pages will render empty shells because API calls will be redirected. This is functional but could leak page structure/copy.
-
-[REC] Consider serving HTML files through a route handler that runs after the gate middleware, or adding a client-side redirect in `common.js` that checks for a `401`/`302` on the auth endpoint and redirects to `/gate.html`. This would prevent unauthenticated users from viewing page markup.
+- **Protected**: All HTML pages (including `/`, `/index.html`, etc.), all API routes (`/api/*` except `/api/health`), auth routes (`/auth/*`), and any server-rendered responses.
+- **Unprotected**: Static assets (CSS, JS, images, fonts) are bypassed via extension check so the gate page can render. `POST /gate` itself is also unprotected (mounted before the middleware).
+- **Explicitly bypassed**: `GET /api/health` (health check for uptime monitors), `GET /gate.html` (the gate page itself).
 
 ## Cookie Details
 

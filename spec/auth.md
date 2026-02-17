@@ -109,39 +109,42 @@
 
 ### Purpose
 
-Pre-launch password protection that blocks all non-health-check requests until a shared password cookie is present.
+Pre-launch password protection that blocks all requests (except health check, gate page, and static assets) until a shared password cookie is present.
 
-### Constants (lines 6–7)
+### Constants (lines 6–8)
 
 | Name | Value |
 |---|---|
 | `GATE_COOKIE` | `"gate"` |
 | `GATE_MAX_AGE` | 30 days (`30 * 24 * 60 * 60 * 1000`) |
+| `STATIC_ASSET_EXT` | Regex matching `.css`, `.js`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.ico`, `.woff`, `.woff2`, `.ttf`, `.eot`, `.map`, `.webp`, `.avif` |
 
-### `hmacGateValue(password)` (lines 10–15)
+### `hmacGateValue(password)` (lines 11–16)
 
 HMAC-SHA256 of `password` using `config.cookieSecret`. Returns hex digest. Used both when setting and when verifying the gate cookie.
 
-### `gateMiddleware(req, res, next)` (lines 18–40)
+### `gateMiddleware(req, res, next)` (lines 19–41)
 
-1. **Disabled** if `config.gatePassword` is falsy (empty string) — calls `next()` immediately (line 20–23).
-2. **Bypasses** `/api/health` — calls `next()` (lines 26–29). Static assets are noted as served before this middleware.
-3. Reads `req.signedCookies[GATE_COOKIE]` and compares to `hmacGateValue(config.gatePassword)` (line 33).
+1. **Disabled** if `config.gatePassword` is falsy (empty string) — calls `next()` immediately (lines 21–24).
+2. **Bypasses** `/api/health`, `/gate.html`, and static asset extensions (`STATIC_ASSET_EXT`) — calls `next()` (lines 27–30).
+3. Reads `req.signedCookies[GATE_COOKIE]` and compares to `hmacGateValue(config.gatePassword)` (line 34).
 4. If cookie matches, calls `next()`.
 5. Otherwise redirects 302 to `/gate.html`.
 
-### `gateHandler(req, res)` (lines 43–63)
+Gate middleware is mounted **before** `express.static` in `app.ts`, so it intercepts all requests including HTML pages. Static assets are allowed through via the `STATIC_ASSET_EXT` extension check.
 
-1. If gate disabled (`!config.gatePassword`), redirects to `/` (lines 44–47).
+### `gateHandler(req, res)` (lines 44–64)
+
+1. If gate disabled (`!config.gatePassword`), redirects to `/` (lines 45–48).
 2. Reads `password` from `req.body`.
-3. Compares plaintext `password !== config.gatePassword`; returns 401 `"Wrong password"` on mismatch (lines 50–52).
-4. Sets signed cookie (lines 55–60):
+3. Compares plaintext `password !== config.gatePassword`; returns 401 `"Wrong password"` on mismatch (lines 51–53).
+4. Sets signed cookie (lines 56–61):
    - Name: `gate`
    - Value: `hmacGateValue(config.gatePassword)`
    - `signed: true`, `httpOnly: true`, `sameSite: 'lax'`
    - `maxAge`: 30 days
    - [GAP] `secure` flag is not set; in production the cookie may be sent over plain HTTP.
-5. Returns `{ ok: true }`.
+5. Returns `{ ok: true }` (line 63).
 
 ### Bypass Rules
 
@@ -149,7 +152,8 @@ HMAC-SHA256 of `password` using `config.cookieSecret`. Returns hex digest. Used 
 |---|---|
 | `config.gatePassword` is empty | Gate entirely disabled |
 | `req.path === '/api/health'` | Passes through |
-| Static assets | Served by earlier middleware (before gate) |
+| `req.path === '/gate.html'` | Passes through (gate page must be accessible) |
+| `STATIC_ASSET_EXT.test(req.path)` | Passes through (CSS, JS, images, fonts) |
 
 ---
 
@@ -157,11 +161,11 @@ HMAC-SHA256 of `password` using `config.cookieSecret`. Returns hex digest. Used 
 
 | ID | Type | Location | Detail |
 |---|---|---|---|
-| 1 | [GAP] | `gate.ts` line 55–60 | Gate cookie does not set `secure: true`. Auth session cookie does (in production). |
-| 2 | [REC] | `gate.ts` line 55–60 | Add `secure: process.env.NODE_ENV === 'production'` to the gate cookie options to match the auth cookie policy. |
+| 1 | [GAP] | `gate.ts` lines 56–61 | Gate cookie does not set `secure: true`. Auth session cookie does (in production). |
+| 2 | [REC] | `gate.ts` lines 56–61 | Add `secure: process.env.NODE_ENV === 'production'` to the gate cookie options to match the auth cookie policy. |
 | 3 | [GAP] | `auth.ts` lines 199–203 | `req` is cast via `(req as any)` to attach user fields. No typed interface extends Express `Request`. |
 | 4 | [REC] | `auth.ts` lines 199–203 | Declare a module augmentation for `express.Request` (or a custom `AuthenticatedRequest` type) to get compile-time safety on `userId`, `githubToken`, etc. |
 | 5 | [GAP] | `auth.ts` line 85–86 | Session expiry interval is interpolated as a template literal (`INTERVAL '${config.sessionMaxAgeDays} days'`), not parameterized. Value comes from hard-coded config (`14`), so no injection risk today, but fragile. |
 | 6 | [REC] | `auth.ts` line 85–86 | Use `NOW() + make_interval(days => $4)` or a parameterized `INTERVAL` to avoid SQL string interpolation. |
-| 7 | [GAP] | `gate.ts` line 50 | Password comparison is plaintext (`!==`), not constant-time. Timing side-channel risk is low for a pre-launch gate, but inconsistent with the HMAC-based approach used everywhere else. |
-| 8 | [REC] | `gate.ts` line 50 | Use `crypto.timingSafeEqual(Buffer.from(password), Buffer.from(config.gatePassword))` for consistency. |
+| 7 | [GAP] | `gate.ts` line 51 | Password comparison is plaintext (`!==`), not constant-time. Timing side-channel risk is low for a pre-launch gate, but inconsistent with the HMAC-based approach used everywhere else. |
+| 8 | [REC] | `gate.ts` line 51 | Use `crypto.timingSafeEqual(Buffer.from(password), Buffer.from(config.gatePassword))` for consistency. |

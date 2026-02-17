@@ -60,10 +60,10 @@ Comprehensive list of invariants that MUST be maintained across the codebase. Ev
 **Tested by:** [test/api/delete.test.ts](../test/api/delete.test.ts) -- `rejects deletion when other users have audits`
 **Spec:** [spec/api.md](../spec/api.md)
 
-### RULE-10: Gate bypasses /api/health and static assets only
-**Rule:** When `GATE_PASSWORD` is set, the gate middleware redirects all requests to `/gate.html` except `/api/health` (explicitly bypassed), `POST /gate` (password submission handler, mounted separately), and static assets (served before the middleware).
-**Enforced by:** [src/server/middleware/gate.ts:gateMiddleware](../src/server/middleware/gate.ts) (L26-29) -- `if (req.path === '/api/health') { next(); return; }`
-**Tested by:** [test/api/gate.test.ts](../test/api/gate.test.ts) -- `allows access to /api/health without cookie`, `allows access to static assets without cookie`, `redirects to /gate.html when no gate cookie`
+### RULE-10: Gate bypasses health check, gate page, and static asset extensions only
+**Rule:** When `GATE_PASSWORD` is set, the gate middleware redirects all requests to `/gate.html` except: `/api/health` (health check), `/gate.html` (gate page itself), static asset extensions via `STATIC_ASSET_EXT` regex (CSS, JS, images, fonts), and `POST /gate` (password submission handler, mounted before the middleware).
+**Enforced by:** [src/server/middleware/gate.ts:gateMiddleware](../src/server/middleware/gate.ts) (L27-30) -- `if (req.path === '/api/health' || req.path === '/gate.html' || STATIC_ASSET_EXT.test(req.path))`
+**Tested by:** [test/api/gate.test.ts](../test/api/gate.test.ts) -- `allows access to /api/health without cookie`, `allows access to static assets without cookie`, `redirects to /gate.html when no gate cookie`, `redirects root HTML page to /gate.html`, `allows CSS files without gate cookie`, `allows JS files without gate cookie`
 **Spec:** [spec/auth.md](../spec/auth.md)
 
 ### RULE-11: Only the project owner can publish/unpublish reports

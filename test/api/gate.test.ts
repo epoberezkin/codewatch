@@ -32,7 +32,7 @@ describe('Development Gate', () => {
   });
 
   it('allows access to static assets without cookie', async () => {
-    // gate.html is a static asset served before the gate middleware
+    // gate.html is bypassed by the gate middleware's path check
     const res = await fetch(`${ctx.baseUrl}/gate.html`);
     expect(res.status).toBe(200);
     const text = await res.text();
@@ -100,6 +100,52 @@ describe('Development Gate', () => {
     });
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/gate.html');
+  });
+
+  it('redirects root HTML page to /gate.html', async () => {
+    const res = await fetch(`${ctx.baseUrl}/`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/gate.html');
+  });
+
+  it('redirects /index.html to /gate.html', async () => {
+    const res = await fetch(`${ctx.baseUrl}/index.html`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/gate.html');
+  });
+
+  it('allows CSS files without gate cookie', async () => {
+    const res = await fetch(`${ctx.baseUrl}/css/style.css`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('css');
+  });
+
+  it('allows JS files without gate cookie', async () => {
+    const res = await fetch(`${ctx.baseUrl}/js/common.js`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('javascript');
+  });
+
+  it('allows HTML pages with valid gate cookie', async () => {
+    // Authenticate to get the cookie
+    const authRes = await fetch(`${ctx.baseUrl}/gate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'test-gate-password' }),
+    });
+    const setCookie = authRes.headers.get('set-cookie')!;
+    const cookieMatch = setCookie.match(/gate=[^;]+/);
+    expect(cookieMatch).toBeTruthy();
+    const gateCookie = cookieMatch![0];
+
+    // Root should serve index.html, not redirect
+    const res = await fetch(`${ctx.baseUrl}/`, {
+      redirect: 'manual',
+      headers: { Cookie: gateCookie },
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('html');
   });
 
   it('disables gate when GATE_PASSWORD not set', async () => {

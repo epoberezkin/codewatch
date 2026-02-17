@@ -5,6 +5,7 @@ import { config } from '../config';
 
 const GATE_COOKIE = 'gate';
 const GATE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+const STATIC_ASSET_EXT = /\.(css|js|svg|png|jpg|jpeg|gif|ico|woff2?|ttf|eot|map|webp|avif)$/i;
 
 // Spec: spec/auth.md#hmacGateValue
 function hmacGateValue(password: string): string {
@@ -22,8 +23,8 @@ export function gateMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // Allow health check through (static assets are served before this middleware)
-  if (req.path === '/api/health') {
+  // Allow health check, gate page itself, and static assets (CSS, JS, images, fonts)
+  if (req.path === '/api/health' || req.path === '/gate.html' || STATIC_ASSET_EXT.test(req.path)) {
     next();
     return;
   }

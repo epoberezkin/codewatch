@@ -260,11 +260,9 @@ If auth check hangs, the page never loads.
 
 ## Security
 
-### GAP: Gate serves static HTML before middleware
+### ~~GAP: Gate serves static HTML before middleware~~ (RESOLVED)
 **Source:** [gate.md](views/gate.md)
-Static HTML files are served by `express.static` before the gate middleware. Unauthenticated users can load any HTML page (rendered as empty shells) which could leak page structure/copy.
-
-**REC:** Serve HTML files through a route handler that runs after the gate middleware, or add a client-side redirect check.
+**Fixed:** Gate middleware now runs before `express.static`. HTML pages are gated; static assets (CSS, JS, images, fonts) are bypassed via extension check so the gate page can render.
 
 ### GAP: Gate cookie missing explicit `secure` flag
 **Source:** [gate.md](views/gate.md)

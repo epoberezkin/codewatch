@@ -14,13 +14,13 @@ export function createApp() {
   app.use(express.json());
   app.use(cookieParser(config.cookieSecret));
 
-  // Static files (before gate — all static assets are always accessible)
-  const publicDir = path.join(__dirname, '..', '..', 'public');
-  app.use(express.static(publicDir));
-
-  // Gate: password-protected access for pre-launch testing
+  // Gate: password-protected access for pre-launch testing (before static files so HTML pages are gated)
   app.post('/gate', gateHandler);
   app.use(gateMiddleware);
+
+  // Static files (after gate — gate bypasses CSS/JS/images/fonts via extension check)
+  const publicDir = path.join(__dirname, '..', '..', 'public');
+  app.use(express.static(publicDir));
 
   // Health check
   app.get('/api/health', (_req, res) => {

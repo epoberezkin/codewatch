@@ -109,9 +109,9 @@ Three-step wizard that guides the user from a GitHub URL to creating a new CodeW
 
 [REC] Make "Select all" only toggle currently visible (non-hidden) repo checkboxes.
 
-[GAP] After adding repos from the "other repositories" list, the list is not re-rendered. Newly selected repos remain checked in the "other" list while also appearing in the "selected" list above. The list is only re-rendered when the section is toggled closed and re-opened.
+~~[GAP] After adding repos from the "other repositories" list, the list is not re-rendered.~~ (RESOLVED)
 
-[REC] Call `renderAllReposList()` after a checkbox change to keep the two lists in sync.
+**Fixed:** `renderAllReposList()` is now called after every checkbox change and after removing a repo via the remove button, keeping both lists in sync.
 
 ---
 

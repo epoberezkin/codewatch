@@ -193,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedRepos.delete(repoName);
         renderSelectedRepos();
         updateStep3();
+        if (!$('all-repos-section')?.classList.contains('hidden')) renderAllReposList();
       });
 
       // Branch trigger
@@ -372,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
           selectedRepos.delete(repo.name);
         }
         renderSelectedRepos();
+        renderAllReposList();
         updateStep3();
       });
 

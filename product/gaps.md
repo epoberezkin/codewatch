@@ -46,11 +46,9 @@ The "Select all" checkbox toggles all checkboxes in the list, including those hi
 
 **REC:** Make "Select all" only toggle currently visible (non-hidden) repo checkboxes.
 
-### GAP: Repo list not re-rendered after checkbox change
+### ~~GAP: Repo list not re-rendered after checkbox change~~ (RESOLVED)
 **Source:** [home.md](views/home.md) (Step 2)
-After adding repos from the "other repositories" list, the list is not re-rendered. Selected repos remain checked in both lists until the section is toggled.
-
-**REC:** Call `renderAllReposList()` after a checkbox change to keep the two lists in sync.
+**Fixed:** `renderAllReposList()` is now called after every checkbox change and after removing a repo via the remove button, keeping both lists in sync.
 
 ### GAP: No debounce on component checkbox changes
 **Source:** [estimate.md](views/estimate.md) (Component Selection)

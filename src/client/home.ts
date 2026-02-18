@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedRepos: Map<string, { name: string; branch: string | null; defaultBranch: string }> = new Map();
   // Cache of loaded branches per repo name
   let branchCache: Map<string, string[]> = new Map();
+  // Repo name entered in Step 1 (preserved on deselect-all)
+  let initialRepoName: string | null = null;
 
   // Spec: spec/client/home.md#parseGitHubUrl
   function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
@@ -94,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Pre-select the entered repo
       selectedRepos.clear();
       branchCache.clear();
+      initialRepoName = parsed.repo;
       selectedRepos.set(parsed.repo, {
         name: parsed.repo,
         branch: null,
@@ -386,18 +389,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
       list.appendChild(li);
     });
+
+    // Re-apply active search filter to newly created DOM nodes
+    const searchQuery = repoSearchInput?.value.trim().toLowerCase();
+    if (searchQuery) {
+      list.querySelectorAll<HTMLLIElement>('.repo-item').forEach(li => {
+        const name = li.querySelector('.repo-item-name')?.textContent?.toLowerCase() || '';
+        const desc = li.querySelector('.repo-item-meta')?.textContent?.toLowerCase() || '';
+        li.style.display = (name.includes(searchQuery) || desc.includes(searchQuery)) ? '' : 'none';
+      });
+    }
   }
 
-  // Select all
+  // Select all -- batch update to avoid O(N²) re-renders
   selectAllCheckbox?.addEventListener('change', () => {
     const checked = selectAllCheckbox.checked;
-    const checkboxes = $('all-repos-list')?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
-    checkboxes?.forEach((cb) => {
-      if (cb.checked !== checked) {
-        cb.checked = checked;
-        cb.dispatchEvent(new Event('change'));
+    if (checked) {
+      for (const repo of allRepos) {
+        if (!selectedRepos.has(repo.name)) {
+          selectedRepos.set(repo.name, { name: repo.name, branch: null, defaultBranch: repo.defaultBranch });
+        }
       }
-    });
+    } else {
+      const initial = initialRepoName ? selectedRepos.get(initialRepoName) : null;
+      selectedRepos.clear();
+      if (initial && initialRepoName) selectedRepos.set(initialRepoName, initial);
+    }
+    renderSelectedRepos();
+    renderAllReposList();
+    updateStep3();
   });
 
   // ---- Step 3: Auth + Create ----

@@ -1,6 +1,6 @@
 # home.ts -- Home Page Module
 
-**Source**: [`home.ts`](../../src/client/home.ts#L1-L450)
+**Source**: [`home.ts`](../../src/client/home.ts#L1-L470)
 **HTML**: `public/index.html`
 
 ---
@@ -14,7 +14,7 @@ Three-step wizard for creating a new project:
 
 ---
 
-## [Interfaces](../../src/client/home.ts#L7-L23)
+## [Interfaces](../../src/client/home.ts#L7-L22)
 
 ```ts
 interface EntityInfo {
@@ -31,7 +31,7 @@ interface RepoInfo {
 
 ---
 
-## [State Variables](../../src/client/home.ts#L36-L42)
+## [State Variables](../../src/client/home.ts#L36-L44)
 
 | Variable | Type | Description |
 |---|---|---|
@@ -40,43 +40,44 @@ interface RepoInfo {
 | `allRepos` | `RepoInfo[]` | All repos for the entity |
 | `selectedRepos` | `Map<string, { name, branch, defaultBranch }>` | Currently selected repos with branch config |
 | `branchCache` | `Map<string, string[]>` | Cached branch lists per repo name |
+| `initialRepoName` | `string \| null` | Repo name from Step 1 URL (preserved on deselect-all) |
 
 ---
 
 ## Functions
 
-### [URL Parsing](../../src/client/home.ts#L45-L55)
+### [URL Parsing](../../src/client/home.ts#L47-L57)
 
 | Function | Signature | Description |
 |---|---|---|
 | `parseGitHubUrl` | `(url: string) => { owner: string; repo: string } \| null` | Extracts owner + repo from a GitHub URL. Validates hostname is `github.com`. Strips `.git` suffix. |
 
-### [Entity Card](../../src/client/home.ts#L129-L156)
+### [Entity Card](../../src/client/home.ts#L132-L159)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderEntityCard` | `(entity: EntityInfo) => void` | Sets avatar, name, type badge. Shows/hides owner/member/reauth badges. |
 
-### [Selected Repos](../../src/client/home.ts#L161-L208)
+### [Selected Repos](../../src/client/home.ts#L164-L211)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderSelectedRepos` | `() => void` | Renders `#selected-repos` list with remove buttons. Branch selector (trigger button) is only rendered when `currentUser` is truthy (authenticated). Attaches per-item remove and branch-open handlers. |
 
-### [Branch Dropdown](../../src/client/home.ts#L210-L301)
+### [Branch Dropdown](../../src/client/home.ts#L213-L304)
 
 | Function | Signature | Description |
 |---|---|---|
 | `openBranchDropdown` | `(repoName: string, trigger: HTMLButtonElement) => Promise<void>` | Fetches branches (or uses cache), replaces trigger with `<select>`. On change, updates `selectedRepos` branch. On blur, closes after 150ms delay. |
 | `closeBranchDropdown` | `(container: HTMLElement, repoName: string) => void` | Removes select, restores trigger button text |
 
-### [All Repos List](../../src/client/home.ts#L335-L389)
+### [All Repos List](../../src/client/home.ts#L338-L402)
 
 | Function | Signature | Description |
 |---|---|---|
-| `renderAllReposList` | `() => void` | Renders available (non-selected) repos with checkboxes into `#all-repos-list`. Checkbox change adds/removes from `selectedRepos` and re-renders this list. Also called from remove button handler when section is visible. Row click toggles checkbox. |
+| `renderAllReposList` | `() => void` | Renders available (non-selected) repos with checkboxes into `#all-repos-list`. Checkbox change adds/removes from `selectedRepos` and re-renders this list. Also called from remove button handler when section is visible. Re-applies active search filter after rendering. Row click toggles checkbox. |
 
-### [Step 3](../../src/client/home.ts#L406-L422)
+### [Step 3](../../src/client/home.ts#L426-L442)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -88,12 +89,12 @@ interface RepoInfo {
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `#add-project-btn` | click | L58-L116 | Parses URL, fetches entity+repos in parallel, pre-selects entered repo, shows steps 2+3 |
-| `#repo-url` (input) | keydown (Enter) | L119-L124 | Triggers `addProjectBtn.click()` |
-| `#add-repos-btn` | click | L305-L320 | Toggles `#all-repos-section` visibility, renders repo list, focuses search |
-| `#repo-search` (input) | input | L323-L332 | Filters `#all-repos-list` items by name/description substring match |
-| `#select-all` (checkbox) | change | L392-L401 | Toggles all visible repo checkboxes |
-| `#create-project-btn` | click | L424-L450 | Builds repo array with branch overrides, posts to `/api/projects`, redirects to `/estimate.html?projectId=` |
+| `#add-project-btn` | click | L60-L119 | Parses URL, fetches entity+repos in parallel, pre-selects entered repo, shows steps 2+3 |
+| `#repo-url` (input) | keydown (Enter) | L122-L127 | Triggers `addProjectBtn.click()` |
+| `#add-repos-btn` | click | L308-L323 | Toggles `#all-repos-section` visibility, renders repo list, focuses search |
+| `#repo-search` (input) | input | L327-L335 | Filters `#all-repos-list` items by name/description substring match |
+| `#select-all` (checkbox) | change | L405-L421 | Batch adds/removes all repos to `selectedRepos` (preserves Step 1 repo on deselect), renders once |
+| `#create-project-btn` | click | L444-L469 | Builds repo array with branch overrides, posts to `/api/projects`, redirects to `/estimate.html?projectId=` |
 
 ---
 
@@ -101,10 +102,10 @@ interface RepoInfo {
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/github/entity/{owner}` | addProjectBtn click | L80 |
-| GET | `/api/github/orgs/{owner}/repos` | addProjectBtn click | L81 |
-| GET | `/api/github/repos/{owner}/{repo}/branches` | openBranchDropdown | L243-L244 |
-| POST | `/api/projects` | createBtn click | L438 |
+| GET | `/api/github/entity/{owner}` | addProjectBtn click | L82 |
+| GET | `/api/github/orgs/{owner}/repos` | addProjectBtn click | L83 |
+| GET | `/api/github/repos/{owner}/{repo}/branches` | openBranchDropdown | L246 |
+| POST | `/api/projects` | createBtn click | L458 |
 
 **POST /api/projects body**:
 ```ts

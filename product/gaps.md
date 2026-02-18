@@ -224,11 +224,9 @@ Once an audit starts, there is no UI mechanism to stop it.
 
 ## Flows: Data Integrity
 
-### GAP: No client-side duplicate-project detection
+### ~~GAP: No client-side duplicate-project detection~~ (RESOLVED)
 **Source:** [home.md](views/home.md) (Step 3)
-The user is not warned before creating a duplicate project. (Note: the server does return 409 for exact duplicates per [project-creation.md](flows/project-creation.md), but the client does not surface the existing project gracefully.)
-
-**REC:** On 409 response, redirect to the existing project with a notice instead of showing a generic error.
+**Fixed:** Preflight check via `POST /api/projects/check` detects duplicates on every repo selection change. Button shows "Open Project" and navigates directly. 409 fallback redirects to existing project.
 
 ### GAP: Security posture relies on API sort order
 **Source:** [project.md](views/project.md)

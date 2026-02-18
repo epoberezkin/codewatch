@@ -108,6 +108,21 @@ function buildThreatModelFileLinks(
     });
 }
 
+// Spec: spec/api.md#findDuplicateProject
+async function findDuplicateProject(
+  pool: any, githubOrg: string, userId: string, sortedRepoNames: string
+): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT p.id FROM projects p
+     WHERE p.github_org = $1 AND p.created_by = $2
+     AND (SELECT string_agg(r.repo_name, ',' ORDER BY r.repo_name)
+          FROM project_repos pr JOIN repositories r ON r.id = pr.repo_id
+          WHERE pr.project_id = p.id) = $3`,
+    [githubOrg, userId, sortedRepoNames]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
 // ============================================================
 // GitHub Org Repos
 // ============================================================
@@ -250,18 +265,9 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
   try {
     // Check for duplicate: same org + same repos (sorted) by the same user
     const sortedNames = repoInputs.map(r => r.name).sort().join(',');
-    const { rows: existingProjects } = await pool.query(
-      `SELECT p.id FROM projects p
-       WHERE p.github_org = $1 AND p.created_by = $2
-       AND (
-         SELECT string_agg(r.repo_name, ',' ORDER BY r.repo_name)
-         FROM project_repos pr JOIN repositories r ON r.id = pr.repo_id
-         WHERE pr.project_id = p.id
-       ) = $3`,
-      [githubOrg, userId, sortedNames]
-    );
-    if (existingProjects.length > 0) {
-      res.status(409).json({ projectId: existingProjects[0].id, existing: true, message: 'Project already exists' });
+    const existingId = await findDuplicateProject(pool, githubOrg, userId, sortedNames);
+    if (existingId) {
+      res.status(409).json({ projectId: existingId, existing: true, message: 'Project already exists' });
       return;
     }
 
@@ -317,6 +323,37 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
   } catch (err) {
     console.error('Error creating project:', err);
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// Spec: spec/api.md#postProjectsCheck
+// POST /api/projects/check — check if a project with the same repos already exists
+router.post('/projects/check', requireAuth as any, async (req: Request, res: Response) => {
+  const { githubOrg, repos } = req.body;
+  const userId = (req as any).userId;
+
+  if (!githubOrg || typeof githubOrg !== 'string') {
+    res.status(400).json({ error: 'githubOrg is required' });
+    return;
+  }
+
+  const repoNames: string[] = Array.isArray(repos)
+    ? repos.map((r: any) => typeof r === 'string' ? r : r.name).filter(Boolean)
+    : [];
+  if (repoNames.length === 0) {
+    res.status(400).json({ error: 'repos[] is required' });
+    return;
+  }
+
+  const sortedNames = repoNames.sort().join(',');
+  const pool = getPool();
+
+  try {
+    const existingId = await findDuplicateProject(pool, githubOrg, userId, sortedNames);
+    res.json({ exists: !!existingId, projectId: existingId || undefined });
+  } catch (err) {
+    console.error('Error checking for duplicate project:', err);
+    res.status(500).json({ error: 'Failed to check for duplicate project' });
   }
 });
 

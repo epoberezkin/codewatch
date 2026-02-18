@@ -1,6 +1,6 @@
 # home.ts -- Home Page Module
 
-**Source**: [`home.ts`](../../src/client/home.ts#L1-L470)
+**Source**: [`home.ts`](../../src/client/home.ts#L1-L497)
 **HTML**: `public/index.html`
 
 ---
@@ -31,7 +31,7 @@ interface RepoInfo {
 
 ---
 
-## [State Variables](../../src/client/home.ts#L36-L44)
+## [State Variables](../../src/client/home.ts#L36-L46)
 
 | Variable | Type | Description |
 |---|---|---|
@@ -41,47 +41,48 @@ interface RepoInfo {
 | `selectedRepos` | `Map<string, { name, branch, defaultBranch }>` | Currently selected repos with branch config |
 | `branchCache` | `Map<string, string[]>` | Cached branch lists per repo name |
 | `initialRepoName` | `string \| null` | Repo name from Step 1 URL (preserved on deselect-all) |
+| `existingProjectId` | `string \| null` | Existing project ID from preflight check, null if no duplicate |
 
 ---
 
 ## Functions
 
-### [URL Parsing](../../src/client/home.ts#L47-L57)
+### [URL Parsing](../../src/client/home.ts#L48-L59)
 
 | Function | Signature | Description |
 |---|---|---|
 | `parseGitHubUrl` | `(url: string) => { owner: string; repo: string } \| null` | Extracts owner + repo from a GitHub URL. Validates hostname is `github.com`. Strips `.git` suffix. |
 
-### [Entity Card](../../src/client/home.ts#L132-L159)
+### [Entity Card](../../src/client/home.ts#L134-L161)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderEntityCard` | `(entity: EntityInfo) => void` | Sets avatar, name, type badge. Shows/hides owner/member/reauth badges. |
 
-### [Selected Repos](../../src/client/home.ts#L164-L211)
+### [Selected Repos](../../src/client/home.ts#L166-L213)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderSelectedRepos` | `() => void` | Renders `#selected-repos` list with remove buttons. Branch selector (trigger button) is only rendered when `currentUser` is truthy (authenticated). Attaches per-item remove and branch-open handlers. |
 
-### [Branch Dropdown](../../src/client/home.ts#L213-L304)
+### [Branch Dropdown](../../src/client/home.ts#L218-L306)
 
 | Function | Signature | Description |
 |---|---|---|
 | `openBranchDropdown` | `(repoName: string, trigger: HTMLButtonElement) => Promise<void>` | Fetches branches (or uses cache), replaces trigger with `<select>`. On change, updates `selectedRepos` branch. On blur, closes after 150ms delay. |
 | `closeBranchDropdown` | `(container: HTMLElement, repoName: string) => void` | Removes select, restores trigger button text |
 
-### [All Repos List](../../src/client/home.ts#L338-L402)
+### [All Repos List](../../src/client/home.ts#L340-L404)
 
 | Function | Signature | Description |
 |---|---|---|
 | `renderAllReposList` | `() => void` | Renders available (non-selected) repos with checkboxes into `#all-repos-list`. Checkbox change adds/removes from `selectedRepos` and re-renders this list. Also called from remove button handler when section is visible. Re-applies active search filter after rendering. Row click toggles checkbox. |
 
-### [Step 3](../../src/client/home.ts#L426-L442)
+### [Step 3](../../src/client/home.ts#L428-L457)
 
 | Function | Signature | Description |
 |---|---|---|
-| `updateStep3` | `() => Promise<void>` | Waits for auth, shows/hides `#auth-required`, enables/disables create button with selection count label |
+| `updateStep3` | `() => Promise<void>` | Waits for auth, shows/hides `#auth-required`. Runs preflight duplicate check via `POST /api/projects/check` -- sets `existingProjectId` if a matching project exists. Enables/disables create button with selection count label; button text changes to "Open Project" when duplicate detected. |
 
 ---
 
@@ -89,12 +90,12 @@ interface RepoInfo {
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `#add-project-btn` | click | L60-L119 | Parses URL, fetches entity+repos in parallel, pre-selects entered repo, shows steps 2+3 |
-| `#repo-url` (input) | keydown (Enter) | L122-L127 | Triggers `addProjectBtn.click()` |
-| `#add-repos-btn` | click | L308-L323 | Toggles `#all-repos-section` visibility, renders repo list, focuses search |
-| `#repo-search` (input) | input | L327-L335 | Filters `#all-repos-list` items by name/description substring match |
-| `#select-all` (checkbox) | change | L405-L421 | Batch adds/removes all repos to `selectedRepos` (preserves Step 1 repo on deselect), renders once |
-| `#create-project-btn` | click | L444-L469 | Builds repo array with branch overrides, posts to `/api/projects`, redirects to `/estimate.html?projectId=` |
+| `#add-project-btn` | click | L62-L121 | Parses URL, fetches entity+repos in parallel, pre-selects entered repo, shows steps 2+3 |
+| `#repo-url` (input) | keydown (Enter) | L124-L129 | Triggers `addProjectBtn.click()` |
+| `#add-repos-btn` | click | L310-L325 | Toggles `#all-repos-section` visibility, renders repo list, focuses search |
+| `#repo-search` (input) | input | L329-L337 | Filters `#all-repos-list` items by name/description substring match |
+| `#select-all` (checkbox) | change | L407-L423 | Batch adds/removes all repos to `selectedRepos` (preserves Step 1 repo on deselect), renders once |
+| `#create-project-btn` | click | L459-L495 | If `existingProjectId` is set, navigates directly to existing project (early return). Otherwise builds repo array with branch overrides, posts to `/api/projects`, redirects to `/estimate.html?projectId=`. On 409 `ApiResponseError` with `body.projectId`, redirects to existing project (race-condition fallback). |
 
 ---
 
@@ -102,10 +103,17 @@ interface RepoInfo {
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/github/entity/{owner}` | addProjectBtn click | L82 |
-| GET | `/api/github/orgs/{owner}/repos` | addProjectBtn click | L83 |
-| GET | `/api/github/repos/{owner}/{repo}/branches` | openBranchDropdown | L246 |
-| POST | `/api/projects` | createBtn click | L458 |
+| GET | `/api/github/entity/{owner}` | addProjectBtn click | L84 |
+| GET | `/api/github/orgs/{owner}/repos` | addProjectBtn click | L85 |
+| GET | `/api/github/repos/{owner}/{repo}/branches` | openBranchDropdown | L248 |
+| POST | `/api/projects/check` | updateStep3 | L443 |
+| POST | `/api/projects` | createBtn click | L479 |
+
+**POST /api/projects/check body**:
+```ts
+{ githubOrg: string, repos: string[] }
+```
+Returns `{ exists: boolean, projectId?: string }`. Best-effort; errors are silently caught.
 
 **POST /api/projects body**:
 ```ts
@@ -154,8 +162,8 @@ interface RepoInfo {
 
 The page does not read query parameters to pre-fill the URL input (e.g., `?url=https://github.com/org/repo`).
 
-## [GAP] No Duplicate Project Detection
+## ~~[GAP] No Duplicate Project Detection~~
 
-No check whether a project for the same org already exists before creation.
+**RESOLVED**: `updateStep3` now runs a preflight duplicate check via `POST /api/projects/check`. If a matching project exists, the create button changes to "Open Project" and navigates directly. A 409 fallback in the create handler catches race-condition duplicates.
 
 ## [REC] Consider adding `?url=` query parameter support for deep-linking from external tools.

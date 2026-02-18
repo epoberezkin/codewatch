@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let branchCache: Map<string, string[]> = new Map();
   // Repo name entered in Step 1 (preserved on deselect-all)
   let initialRepoName: string | null = null;
+  // Existing project ID if current repo selection matches one (preflight check)
+  let existingProjectId: string | null = null;
 
   // Spec: spec/client/home.md#parseGitHubUrl
   function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
@@ -433,16 +435,35 @@ document.addEventListener('DOMContentLoaded', () => {
       else show(authRequired);
     }
 
+    // Preflight duplicate check
+    existingProjectId = null;
+    if (isLoggedIn && hasSelection) {
+      try {
+        const repoNames = Array.from(selectedRepos.keys());
+        const result = await apiPost<{ exists: boolean; projectId?: string }>(
+          '/api/projects/check', { githubOrg: parsedOwner, repos: repoNames }
+        );
+        if (result.exists && result.projectId) existingProjectId = result.projectId;
+      } catch { /* best-effort */ }
+    }
+
     if (createBtn) {
       createBtn.disabled = !hasSelection || !isLoggedIn;
+      const repoLabel = `${selectedRepos.size} repo${selectedRepos.size > 1 ? 's' : ''}`;
       createBtn.textContent = hasSelection
-        ? `Create Project (${selectedRepos.size} repo${selectedRepos.size > 1 ? 's' : ''})`
+        ? (existingProjectId ? `Open Project (${repoLabel})` : `Create Project (${repoLabel})`)
         : 'Select at least one repository';
     }
   }
 
   createBtn?.addEventListener('click', async () => {
     if (selectedRepos.size === 0 || !createBtn) return;
+
+    // Preflight found existing project — navigate directly
+    if (existingProjectId) {
+      window.location.href = `/estimate.html?projectId=${existingProjectId}`;
+      return;
+    }
 
     createBtn.disabled = true;
     if (loading) show(loading);
@@ -461,6 +482,11 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       window.location.href = `/estimate.html?projectId=${result.projectId}`;
     } catch (err) {
+      // 409 fallback: race-condition duplicate — redirect to existing project
+      if (err instanceof ApiResponseError && err.status === 409 && err.body?.projectId) {
+        window.location.href = `/estimate.html?projectId=${err.body.projectId}`;
+        return;
+      }
       if (loading) hide(loading);
       if (step3) show(step3);
       createBtn.disabled = false;

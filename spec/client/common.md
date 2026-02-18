@@ -1,6 +1,6 @@
 # common.ts -- Shared Client Utilities
 
-**Source**: [`common.ts`](../../src/client/common.ts#L1-L435)
+**Source**: [`common.ts`](../../src/client/common.ts#L1-L452)
 
 All exports are global functions/variables (no ES module exports). Loaded by every HTML page.
 
@@ -18,16 +18,26 @@ All exports are global functions/variables (no ES module exports). Loaded by eve
 
 ---
 
-## [Fetch Helpers](../../src/client/common.ts#L34-L97)
+## [Fetch Helpers](../../src/client/common.ts#L34-L108)
 
 ### [Interface: `ApiError`](../../src/client/common.ts#L36-L39)
 ```ts
 interface ApiError { error: string; details?: string }
 ```
 
+### [Class: `ApiResponseError`](../../src/client/common.ts#L42-L50)
+```ts
+class ApiResponseError extends Error {
+  status: number;
+  body: any;
+  constructor(message: string, status: number, body: any);
+}
+```
+Thrown by `apiFetch` on non-OK responses. Preserves the HTTP status code and parsed response body, enabling callers to branch on specific status codes (e.g., 409 for duplicate detection).
+
 | Function | Signature | Description |
 |---|---|---|
-| `apiFetch<T>` | `(path: string, options?: RequestInit & { timeout?: number }) => Promise<T>` | Core fetch wrapper. Default 60s timeout via `AbortController`. Sets `Content-Type: application/json`. Parses error body on non-OK. Handles 429 with `Retry-After`. Returns `undefined as T` for 204. |
+| `apiFetch<T>` | `(path: string, options?: RequestInit & { timeout?: number }) => Promise<T>` | Core fetch wrapper. Default 60s timeout via `AbortController`. Sets `Content-Type: application/json`. Parses error body on non-OK and throws `ApiResponseError` with status code and body preserved. Handles 429 with `Retry-After`. Returns `undefined as T` for 204. |
 | `apiPost<T>` | `(path: string, body: unknown) => Promise<T>` | Convenience POST wrapper around `apiFetch` |
 | `apiPut<T>` | `(path: string, body: unknown) => Promise<T>` | Convenience PUT wrapper around `apiFetch` |
 
@@ -39,7 +49,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [DOM Helpers](../../src/client/common.ts#L98-L127)
+## [DOM Helpers](../../src/client/common.ts#L110-L139)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -51,7 +61,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [URL / Formatting Helpers](../../src/client/common.ts#L129-L241)
+## [URL / Formatting Helpers](../../src/client/common.ts#L141-L253)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -64,7 +74,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Styling Helpers](../../src/client/common.ts#L166-L183)
+## [Styling Helpers](../../src/client/common.ts#L178-L195)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -73,7 +83,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Badge Rendering](../../src/client/common.ts#L185-L204)
+## [Badge Rendering](../../src/client/common.ts#L197-L216)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -82,7 +92,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Error Handling](../../src/client/common.ts#L206-L227)
+## [Error Handling](../../src/client/common.ts#L218-L238)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -92,7 +102,7 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Shared Renderer: renderThreatModel](../../src/client/common.ts#L243-L296)
+## [Shared Renderer: renderThreatModel](../../src/client/common.ts#L255-L307)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -100,28 +110,30 @@ interface ApiError { error: string; details?: string }
 
 ---
 
-## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L298-L340)
+## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L312-L356)
 
 | Function | Signature | Description |
 |---|---|---|
-| `attachAddAsProjectHandlers` | `(selector: string) => void` | Attaches click handlers to all buttons matching `selector`. Parses GitHub URL from `data-url`, creates project via `POST /api/projects`, links dependency via `POST /api/dependencies/{depId}/link`. |
+| `attachAddAsProjectHandlers` | `(selector: string) => void` | Attaches click handlers to all buttons matching `selector`. Parses GitHub URL from `data-url`, creates project via `POST /api/projects`, links dependency via `POST /api/dependencies/{depId}/link`. On `ApiResponseError` with status 409 and `body.projectId`, links the dependency to the existing project and replaces the button with a "View Project" link (duplicate-safe). |
 
 **API calls**:
 - `POST /api/projects` -- `{ githubOrg, repoNames: [repoName] }`
 - `POST /api/dependencies/{depId}/link` -- `{ linkedProjectId }`
 
+**409 handling**: When project creation returns 409 (duplicate), the handler catches `ApiResponseError`, extracts `body.projectId`, links the dependency to the existing project, and replaces the button with a "View Project" link pointing to the existing project.
+
 **Data attributes read**: `data-dep-id`, `data-name`, `data-url`
 
 ---
 
-## [Auth State](../../src/client/common.ts#L341-L407)
+## [Auth State](../../src/client/common.ts#L358-L424)
 
-### [Interface: `AuthUser`](../../src/client/common.ts#L343-L348)
+### [Interface: `AuthUser`](../../src/client/common.ts#L360-L365)
 ```ts
 interface AuthUser { id: string; username: string; avatarUrl?: string; githubType: string }
 ```
 
-### [Variables](../../src/client/common.ts#L350-L351)
+### [Variables](../../src/client/common.ts#L367-L368)
 | Variable | Type | Description |
 |---|---|---|
 | `currentUser` | `AuthUser \| null` | Populated by `checkAuth()`. Readable by all page modules. |
@@ -143,7 +155,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## [Navigation](../../src/client/common.ts#L409-L425)
+## [Navigation](../../src/client/common.ts#L426-L442)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -154,7 +166,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## [Init Sequence](../../src/client/common.ts#L427-L435)
+## [Init Sequence](../../src/client/common.ts#L444-L452)
 
 ```ts
 document.addEventListener('DOMContentLoaded', async () => {

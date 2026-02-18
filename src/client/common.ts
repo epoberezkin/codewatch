@@ -38,6 +38,17 @@ interface ApiError {
   details?: string;
 }
 
+// Spec: spec/client/common.md#ApiResponseError
+class ApiResponseError extends Error {
+  status: number;
+  body: any;
+  constructor(message: string, status: number, body: any) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 // Spec: spec/client/common.md#apiFetch
 async function apiFetch<T>(path: string, options: RequestInit & { timeout?: number } = {}): Promise<T> {
   const timeout = options.timeout ?? 60000;
@@ -55,9 +66,10 @@ async function apiFetch<T>(path: string, options: RequestInit & { timeout?: numb
 
     if (!res.ok) {
       let msg = `HTTP ${res.status}`;
+      let body: any = {};
       try {
-        const body: ApiError = await res.json();
-        msg = body.error || msg;
+        body = await res.json();
+        msg = body.error || body.message || msg;
       } catch {
         // ignore parse errors
       }
@@ -67,7 +79,7 @@ async function apiFetch<T>(path: string, options: RequestInit & { timeout?: numb
           ? `Rate limited. Please wait ${retryAfter} seconds and try again.`
           : 'Rate limited. Please wait a moment and try again.';
       }
-      throw new Error(msg);
+      throw new ApiResponseError(msg, res.status, body);
     }
 
     // Handle 204 No Content
@@ -330,6 +342,11 @@ function attachAddAsProjectHandlers(selector: string): void {
         await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: newProject.projectId });
         btn.outerHTML = `<a href="/project.html?projectId=${newProject.projectId}" class="btn btn-sm btn-secondary">View Project</a>`;
       } catch (err) {
+        if (err instanceof ApiResponseError && err.status === 409 && err.body?.projectId) {
+          await apiPost(`/api/dependencies/${depId}/link`, { linkedProjectId: err.body.projectId });
+          btn.outerHTML = `<a href="/project.html?projectId=${escapeHtml(err.body.projectId)}" class="btn btn-sm btn-secondary">View Project</a>`;
+          return;
+        }
         btn.disabled = false;
         btn.textContent = 'Add as Project';
         showError(err instanceof Error ? err.message : 'Failed to add as project');

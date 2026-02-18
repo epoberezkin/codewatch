@@ -260,4 +260,101 @@ describe('Projects API', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe('POST /api/projects (duplicate)', () => {
+    it('returns 409 with projectId for duplicate project', async () => {
+      const session = await createTestSession(ctx.pool);
+      const createRes = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['repo-alpha'] }),
+      });
+      expect(createRes.status).toBe(200);
+      const { projectId } = await createRes.json();
+
+      const dupRes = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['repo-alpha'] }),
+      });
+      expect(dupRes.status).toBe(409);
+      const body = await dupRes.json();
+      expect(body.projectId).toBe(projectId);
+      expect(body.existing).toBe(true);
+    });
+  });
+
+  describe('POST /api/projects/check', () => {
+    it('requires authentication', async () => {
+      const res = await fetch(`${ctx.baseUrl}/api/projects/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repos: ['repo-alpha'] }),
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns exists: false when no duplicate', async () => {
+      const session = await createTestSession(ctx.pool);
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/check`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repos: ['repo-alpha'] }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.exists).toBe(false);
+      expect(body.projectId).toBeUndefined();
+    });
+
+    it('returns exists: true with projectId when duplicate found', async () => {
+      const session = await createTestSession(ctx.pool);
+      const createRes = await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['repo-alpha', 'repo-beta'] }),
+      });
+      const { projectId } = await createRes.json();
+
+      // Check with repos in different order
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/check`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repos: ['repo-beta', 'repo-alpha'] }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.exists).toBe(true);
+      expect(body.projectId).toBe(projectId);
+    });
+
+    it('does not detect duplicate across different users', async () => {
+      const session1 = await createTestSession(ctx.pool);
+      await authenticatedFetch(`${ctx.baseUrl}/api/projects`, session1.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repoNames: ['repo-alpha'] }),
+      });
+
+      const session2 = await createTestSession(ctx.pool);
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/check`, session2.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubOrg: 'test-org', repos: ['repo-alpha'] }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.exists).toBe(false);
+    });
+
+    it('validates required fields', async () => {
+      const session = await createTestSession(ctx.pool);
+      const res = await authenticatedFetch(`${ctx.baseUrl}/api/projects/check`, session.cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
 });

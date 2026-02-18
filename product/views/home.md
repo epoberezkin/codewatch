@@ -124,7 +124,11 @@ Three-step wizard that guides the user from a GitHub URL to creating a new CodeW
 - Step indicator: Badge "3" with label "Create project & estimate cost"
 - **If not signed in**: Info notice "Sign in with GitHub to continue." with a "Sign in" link to `/auth/github`. The create button is disabled.
 - **If signed in**: Notice is hidden. Button is enabled (if repos are selected).
-- **Button text**: "Create Project (N repos)" where N is the count, or "Select at least one repository" if none selected.
+- **Button text**: Dynamic based on preflight check (see below):
+  - "Select at least one repository" -- when no repos are selected (button disabled)
+  - "Open Project (N repos)" -- when preflight found an existing project with matching org + repo set
+  - "Create Project (N repos)" -- when no existing project was found
+- **Preflight behavior**: Every time the repo selection changes (add, remove, or branch change) while the user is logged in and at least one repo is selected, the client fires `POST /api/projects/check` with the current `githubOrg` and `repos` array. If the endpoint returns an existing project (`{ exists: true, projectId }`), the button text switches to "Open Project (N repos)". If no match or the call fails, the button shows "Create Project (N repos)".
 
 ### Authentication Check
 
@@ -134,27 +138,30 @@ Three-step wizard that guides the user from a GitHub URL to creating a new CodeW
 
 ### Create Flow
 
-1. User clicks "Create Project (N repos)".
-2. Button is disabled; loading overlay ("Setting up project...") with spinner is shown; step 3 is hidden.
-3. `POST /api/projects` is called with body:
-   ```json
-   {
-     "githubOrg": "<owner>",
-     "repos": [
-       { "name": "<repo>", "branch": "<branch-or-undefined>", "defaultBranch": "<default>" }
-     ]
-   }
-   ```
-4. **On success**: `window.location.href = /estimate.html?projectId={id}`.
-5. **On error**: Loading overlay hidden, step 3 restored, button re-enabled, `showError()` prepends a red notice to `<main>`.
+1. User clicks the action button.
+2. **If preflight found an existing project** ("Open Project" mode): navigate directly to `/estimate.html?projectId={existingProjectId}` with no API call. No loading overlay is shown.
+3. **If no existing project** ("Create Project" mode):
+   a. Button is disabled; loading overlay ("Setting up project...") with spinner is shown; step 3 is hidden.
+   b. `POST /api/projects` is called with body:
+      ```json
+      {
+        "githubOrg": "<owner>",
+        "repos": [
+          { "name": "<repo>", "branch": "<branch-or-undefined>", "defaultBranch": "<default>" }
+        ]
+      }
+      ```
+   c. **On success**: `window.location.href = /estimate.html?projectId={id}`.
+   d. **On 409 (duplicate)**: Extract the existing project ID from the response body and redirect to `/estimate.html?projectId={existingProjectId}` instead of showing an error.
+   e. **On other error**: Loading overlay hidden, step 3 restored, button re-enabled, `showError()` prepends a red notice to `<main>`.
 
 [GAP] The loading overlay has no timeout or cancel mechanism. If the API call hangs, the user is stuck on a spinner with no way to retry.
 
 [REC] Add a timeout (e.g., the default 60s from `apiFetch`) and ensure the error handler restores the UI. Consider adding a "Cancel" button on the loading overlay.
 
-[GAP] No client-side duplicate-project handling. The server returns 409 for exact duplicates (same user, same org, same sorted repo set), but the client shows a generic error instead of redirecting to the existing project.
+~~[GAP] No client-side duplicate-project handling. The server returns 409 for exact duplicates (same user, same org, same sorted repo set), but the client shows a generic error instead of redirecting to the existing project.~~ (RESOLVED)
 
-[REC] On 409 response, extract the existing project ID from the response body and redirect to it, or show a link to the existing project.
+**Fixed:** Preflight check via `POST /api/projects/check` detects duplicates on every repo selection change. Button shows "Open Project" and navigates directly. 409 fallback redirects to existing project.
 
 ---
 

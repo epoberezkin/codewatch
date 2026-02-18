@@ -57,7 +57,7 @@ Product concepts referenced below are drawn from the [Capability Map](../product
 | Source File | Product Views Affected | Risk Level | Notes |
 |-------------|----------------------|------------|-------|
 | `common.ts` | ALL views | **High** | Shared utilities: `apiFetch()`, auth status, DOM helpers, theme toggle, formatting; breakage cascades to every page |
-| `home.ts` | Home / Project Creation (`index.html`) | **Medium** | Three-step wizard: URL input, entity info, repo/branch selection, project creation; affects PC1, PC17 |
+| `home.ts` | Home / Project Creation (`index.html`) | **Medium** | Three-step wizard: URL input, entity info, repo/branch selection, project creation; affects PC1, PC17, PC18 |
 | `estimate.ts` | Estimate page (`estimate.html`) | **Medium** | Cost estimation display, component analysis trigger, audit level selection, audit start; affects PC5, PC6, PC7 |
 | `audit.ts` | Audit Progress page (`audit.html`) | **Low** | Polling-based progress display; read-only view of audit status; affects PC9 |
 | `report.ts` | Report page (`report.html`) | **High** | Three-tier rendering, finding filters, status changes, publish/unpublish, comments, disclosure; affects PC10, PC11, PC12, PC13, PC14, PC15 |

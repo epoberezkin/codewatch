@@ -81,9 +81,9 @@ Three-step wizard that guides the user from a GitHub URL to creating a new CodeW
   - Remove button (x) on the left
   - Repo name
   - Metadata line: language, star count
-  - Branch selector button on the right (shows current branch name)
+  - Branch selector button on the right (shows current branch name) -- **only shown for authenticated users** (the branch API requires authentication)
 
-**Branch selector**:
+**Branch selector** (authenticated users only):
 1. Click the branch button to open a `<select>` dropdown.
 2. Dropdown first shows "Loading..." while fetching `GET /api/github/repos/{owner}/{repo}/branches`.
 3. Branches are cached per repo in `branchCache` (Map) -- subsequent opens use the cache.

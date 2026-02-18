@@ -1,6 +1,6 @@
 # home.ts -- Home Page Module
 
-**Source**: [`home.ts`](../../src/client/home.ts#L1-L449)
+**Source**: [`home.ts`](../../src/client/home.ts#L1-L448)
 **HTML**: `public/index.html`
 
 ---
@@ -61,7 +61,7 @@ interface RepoInfo {
 
 | Function | Signature | Description |
 |---|---|---|
-| `renderSelectedRepos` | `() => void` | Renders `#selected-repos` list with remove buttons and branch trigger buttons. Attaches per-item remove and branch-open handlers. |
+| `renderSelectedRepos` | `() => void` | Renders `#selected-repos` list with remove buttons. Branch selector (trigger button) is only rendered when `currentUser` is truthy (authenticated). Attaches per-item remove and branch-open handlers. |
 
 ### [Branch Dropdown](../../src/client/home.ts#L209-L300)
 

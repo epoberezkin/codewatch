@@ -179,11 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ${info ? `<span>${info.stars.toLocaleString()} stars</span>` : ''}
           </div>
         </div>
-        <div class="branch-selector" data-repo="${escapeHtml(repoName)}">
+        ${currentUser ? `<div class="branch-selector" data-repo="${escapeHtml(repoName)}">
           <button class="btn btn-sm btn-secondary branch-trigger" data-repo="${escapeHtml(repoName)}">
             ${escapeHtml(repo.branch || repo.defaultBranch)}
           </button>
-        </div>
+        </div>` : ''}
       `;
 
       // Remove button

@@ -64,6 +64,7 @@ This applies all SQL migrations from `sql/` to create the schema (tables, indexe
 | `GITHUB_CALLBACK_URL` | No | OAuth callback URL (default: `http://localhost:3000/auth/github/callback`) |
 | `ANTHROPIC_SERVICE_KEY` | No | Anthropic API key for free `count_tokens` endpoint (precise estimates) |
 | `COOKIE_SECRET` | Yes (prod) | Secret for signing session cookies (see below) |
+| `NODE_ENV` | Yes (prod) | Set to `production` in production to enable secure (HTTPS-only) cookies |
 | `GATE_PASSWORD` | No | Password to gate access during pre-launch testing. If not set, gate is disabled (open access). |
 | `REPOS_DIR` | No | Directory for cloned repos (default: `./repos`) |
 | `PORT` | No | Server port (default: `3000`) |

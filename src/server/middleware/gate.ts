@@ -58,6 +58,7 @@ export function gateHandler(req: Request, res: Response): void {
     httpOnly: true,
     maxAge: GATE_MAX_AGE,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
   });
 
   res.json({ ok: true });

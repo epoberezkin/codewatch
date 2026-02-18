@@ -258,11 +258,9 @@ If auth check hangs, the page never loads.
 **Source:** [gate.md](views/gate.md)
 **Fixed:** Gate middleware now runs before `express.static`. HTML pages are gated; static assets (CSS, JS, images, fonts) are bypassed via extension check so the gate page can render.
 
-### GAP: Gate cookie missing explicit `secure` flag
+### ~~GAP: Gate cookie missing explicit `secure` flag~~ (RESOLVED)
 **Source:** [gate.md](views/gate.md)
-In production over HTTPS this could allow the cookie to be sent over HTTP if proxy configuration is incorrect.
-
-**REC:** Explicitly set `secure: true` in production (or conditionally based on `NODE_ENV`).
+**Fixed:** Gate cookie now sets `secure: process.env.NODE_ENV === 'production'`, matching the session cookie pattern in auth.ts.
 
 ### GAP: No rate limiting on `POST /gate`
 **Source:** [gate.md](views/gate.md)

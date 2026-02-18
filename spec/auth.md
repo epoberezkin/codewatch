@@ -133,7 +133,7 @@ HMAC-SHA256 of `password` using `config.cookieSecret`. Returns hex digest. Used 
 
 Gate middleware is mounted **before** `express.static` in `app.ts`, so it intercepts all requests including HTML pages. Static assets are allowed through via the `STATIC_ASSET_EXT` extension check.
 
-### `gateHandler(req, res)` (lines 44–64)
+### `gateHandler(req, res)` (lines 44–65)
 
 1. If gate disabled (`!config.gatePassword`), redirects to `/` (lines 45–48).
 2. Reads `password` from `req.body`.
@@ -142,8 +142,8 @@ Gate middleware is mounted **before** `express.static` in `app.ts`, so it interc
    - Name: `gate`
    - Value: `hmacGateValue(config.gatePassword)`
    - `signed: true`, `httpOnly: true`, `sameSite: 'lax'`
+   - `secure: process.env.NODE_ENV === 'production'`
    - `maxAge`: 30 days
-   - [GAP] `secure` flag is not set; in production the cookie may be sent over plain HTTP.
 5. Returns `{ ok: true }` (line 63).
 
 ### Bypass Rules
@@ -161,8 +161,8 @@ Gate middleware is mounted **before** `express.static` in `app.ts`, so it interc
 
 | ID | Type | Location | Detail |
 |---|---|---|---|
-| 1 | [GAP] | `gate.ts` lines 56–61 | Gate cookie does not set `secure: true`. Auth session cookie does (in production). |
-| 2 | [REC] | `gate.ts` lines 56–61 | Add `secure: process.env.NODE_ENV === 'production'` to the gate cookie options to match the auth cookie policy. |
+| 1 | ~~[GAP]~~ | `gate.ts` lines 56–62 | ~~Gate cookie does not set `secure: true`.~~ **RESOLVED**: Now sets `secure: process.env.NODE_ENV === 'production'`, matching auth cookie. |
+| 2 | ~~[REC]~~ | `gate.ts` lines 56–62 | ~~Add `secure` flag.~~ **RESOLVED**. |
 | 3 | [GAP] | `auth.ts` lines 199–203 | `req` is cast via `(req as any)` to attach user fields. No typed interface extends Express `Request`. |
 | 4 | [REC] | `auth.ts` lines 199–203 | Declare a module augmentation for `express.Request` (or a custom `AuthenticatedRequest` type) to get compile-time safety on `userId`, `githubToken`, etc. |
 | 5 | [GAP] | `auth.ts` line 85–86 | Session expiry interval is interpolated as a template literal (`INTERVAL '${config.sessionMaxAgeDays} days'`), not parameterized. Value comes from hard-coded config (`14`), so no injection risk today, but fragile. |

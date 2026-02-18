@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const step3 = $('step-3');
   const createBtn = $('create-project-btn') as HTMLButtonElement | null;
   const authRequired = $('auth-required');
+  const step3Label = $('step-3-label');
   const loading = $('loading');
   const addReposBtn = $('add-repos-btn') as HTMLButtonElement | null;
   const selectAllCheckbox = $('select-all') as HTMLInputElement | null;
@@ -447,6 +448,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch { /* best-effort */ }
     }
 
+    if (step3Label) {
+      step3Label.textContent = existingProjectId
+        ? 'Open existing project' : 'Create project & estimate cost';
+    }
     if (createBtn) {
       createBtn.disabled = !hasSelection || !isLoggedIn;
       const repoLabel = `${selectedRepos.size} repo${selectedRepos.size > 1 ? 's' : ''}`;

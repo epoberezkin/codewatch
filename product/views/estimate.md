@@ -72,7 +72,7 @@ If `EstimateData.cloneErrors` is non-empty, a `notice-error` div lists each fail
 
 | Element | Source |
 |---|---|
-| Per-repo breakdown | Compact repo rows: each shows `repoName · N files · N tokens · branch @ sha`. Multi-repo projects show an hr + Total row with combined files and tokens. |
+| Per-repo breakdown | Compact repo rows: each shows `repoName` (with external link icon to GitHub) `· N files · N tokens · branch @ sha`. Multi-repo projects show an hr + Total row with combined files and tokens. |
 
 #### Branch Editor
 

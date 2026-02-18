@@ -124,13 +124,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newAuditBtn = $('new-audit-btn') as HTMLAnchorElement | null;
     if (newAuditBtn) newAuditBtn.href = `/estimate.html?projectId=${project.id}`;
 
-    // Change Branches link → estimate page
-    const branchBtn = $('change-branches-btn') as HTMLAnchorElement | null;
-    if (branchBtn) {
-      branchBtn.href = `/estimate.html?projectId=${project.id}`;
-      branchBtn.textContent = project.repos.length === 1 ? 'Change Branch' : 'Change Branches';
-    }
-
     // Classification
     if (project.category) {
       show('classification-section');

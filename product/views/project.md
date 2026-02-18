@@ -50,8 +50,6 @@ Each repository is rendered as a compact row showing: repo name with external li
 
 Multi-repo projects show an `<hr>` divider followed by a Total row with combined files and tokens.
 
-**Change Branches** link (top-right, alongside Repositories heading): navigates to `/estimate.html?projectId=<id>`. Button text is singular ("Change Branch") for single-repo, plural ("Change Branches") for multi-repo.
-
 ### 4. Components
 
 Hidden by default; shown only when `components.length > 0`.

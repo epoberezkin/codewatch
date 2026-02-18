@@ -539,7 +539,7 @@ tr:hover td {
 }
 
 /* ---------- Repo Row (compact repo display) ---------- */
-.repo-row { padding: 0.25rem 0; }
+.repo-row { padding: 0.25rem 0; font-size: 0.875rem; }
 .repo-link { text-decoration: none; color: inherit; }
 .repo-link:hover { text-decoration: underline; }
 .icon-external {

@@ -1,6 +1,6 @@
 # estimate.ts -- Estimate Page Module
 
-**Source**: [`estimate.ts`](../../src/client/estimate.ts#L1-L684)
+**Source**: [`estimate.ts`](../../src/client/estimate.ts#L1-L687)
 **HTML**: `public/estimate.html`
 
 ---
@@ -65,45 +65,45 @@ interface AnalysisStatus {
 
 ## Functions
 
-### [Rendering](../../src/client/estimate.ts#L140-L205)
+### [Rendering](../../src/client/estimate.ts#L140-L208)
 
 | Function | Signature | Line | Description |
 |---|---|---|---|
 | `renderProjectHeader` | `(project: ProjectData) => void` | L143 | Hides loading, shows header with repo-name-based title (1-3 joined with +, 4+ shows first 2 + "N more"), org as description |
-| `renderProjectStats` | `(data: EstimateData) => void` | L156 | Renders compact repo rows (name · files · tokens · branch @ sha). Multi-repo adds hr + Total row. |
-| `updatePrecisionLabel` | `(data: EstimateData) => void` | L178 | Shows precise vs approximate label, hides precise button if already precise |
-| `renderEstimateCards` | `(data: EstimateData) => void` | L189 | Sets price text in each level card |
-| `updateAnalysisCostHint` | `(data: EstimateData) => void` | L198 | Calculates ~5% overhead cost for component analysis |
+| `renderProjectStats` | `(data: EstimateData, githubOrg: string) => void` | L156 | Renders compact repo rows (name with link icon · files · tokens · branch @ sha). Multi-repo adds hr + Total row. |
+| `updatePrecisionLabel` | `(data: EstimateData) => void` | L181 | Shows precise vs approximate label, hides precise button if already precise |
+| `renderEstimateCards` | `(data: EstimateData) => void` | L192 | Sets price text in each level card |
+| `updateAnalysisCostHint` | `(data: EstimateData) => void` | L201 | Calculates ~5% overhead cost for component analysis |
 
-### [Component Loading](../../src/client/estimate.ts#L207-L280)
-
-| Function | Signature | Line | Description |
-|---|---|---|---|
-| `loadExistingComponents` | `() => Promise<void>` | L210 | Fetches existing components; if found, skips to step 2 |
-| `showStep2` | `(comps: ComponentItem[]) => void` | L225 | Hides analyze section, renders component table, enables level cards, triggers scoped estimate |
-| `enableCards` | `() => void` | L237 | Removes `disabled` class from `.estimate-card` elements, hides hint |
-| `renderComponentTable` | `(comps: ComponentItem[]) => void` | L246 | Renders component rows with checkboxes into `#component-table-body`. Attaches change listeners. Replaces `#select-all-components` to avoid listener accumulation. |
-
-### [Component Selection](../../src/client/estimate.ts#L282-L318)
+### [Component Loading](../../src/client/estimate.ts#L210-L283)
 
 | Function | Signature | Line | Description |
 |---|---|---|---|
-| `onComponentSelectionChange` | `() => Promise<void>` | L283 | Rebuilds `selectedComponentIds` from checkboxes, calls `updateScopedEstimate`, `updateStartButton` |
-| `updateScopedEstimate` | `() => Promise<void>` | L294 | Posts to `/api/estimate/components` with selected component IDs. Updates level card prices. Shows selection summary label. |
+| `loadExistingComponents` | `() => Promise<void>` | L213 | Fetches existing components; if found, skips to step 2 |
+| `showStep2` | `(comps: ComponentItem[]) => void` | L228 | Hides analyze section, renders component table, enables level cards, triggers scoped estimate |
+| `enableCards` | `() => void` | L240 | Removes `disabled` class from `.estimate-card` elements, hides hint |
+| `renderComponentTable` | `(comps: ComponentItem[]) => void` | L249 | Renders component rows with checkboxes into `#component-table-body`. Attaches change listeners. Replaces `#select-all-components` to avoid listener accumulation. |
 
-### [Start Button](../../src/client/estimate.ts#L486-L519)
-
-| Function | Signature | Line | Description |
-|---|---|---|---|
-| `updateStartButton` | `() => void` | L487 | Validates: has components, has level, has valid API key. Sets button text with cost estimate. Shows/hides key format error. |
-
-### [Analyze Button](../../src/client/estimate.ts#L362-L367)
+### [Component Selection](../../src/client/estimate.ts#L285-L321)
 
 | Function | Signature | Line | Description |
 |---|---|---|---|
-| `updateAnalyzeButton` | `() => void` | L363 | Enables/disables analyze button based on API key format |
+| `onComponentSelectionChange` | `() => Promise<void>` | L286 | Rebuilds `selectedComponentIds` from checkboxes, calls `updateScopedEstimate`, `updateStartButton` |
+| `updateScopedEstimate` | `() => Promise<void>` | L297 | Posts to `/api/estimate/components` with selected component IDs. Updates level card prices. Shows selection summary label. |
 
-### [API Key Validation](../../src/client/estimate.ts#L335-L337)
+### [Start Button](../../src/client/estimate.ts#L489-L522)
+
+| Function | Signature | Line | Description |
+|---|---|---|---|
+| `updateStartButton` | `() => void` | L490 | Validates: has components, has level, has valid API key. Sets button text with cost estimate. Shows/hides key format error. |
+
+### [Analyze Button](../../src/client/estimate.ts#L365-L370)
+
+| Function | Signature | Line | Description |
+|---|---|---|---|
+| `updateAnalyzeButton` | `() => void` | L366 | Enables/disables analyze button based on API key format |
+
+### [API Key Validation](../../src/client/estimate.ts#L338-L340)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -115,19 +115,19 @@ interface AnalysisStatus {
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `.estimate-card` (each) | click, keydown (Enter/Space) | L432-L460 | Selects level card, shows step 3, updates start button. Cards have `role="button"`, `tabindex="0"`, `aria-pressed`. |
-| `#api-key` (input) | input | L340-L356 | Updates start/analyze buttons. Shows/removes format hint if key doesn't start with `sk-ant-`. |
-| `#analyze-components-btn` | click | L369-L428 | Posts to analyze endpoint, polls status every 2s (max 150 retries / ~5 min). On completion, loads components and shows step 2. |
-| `#precise-btn` | click | L465-L482 | Posts to precise estimate endpoint, updates cards and labels |
-| `#start-audit-btn` | click | L522-L546 | Builds audit body (level, apiKey, optional baseAuditId, optional componentIds), posts to `/api/audit/start`, redirects to `/audit.html?auditId=` |
-| `#incremental-btn` | click | L563-L570 | Sets `useIncremental = true`, toggles button styles |
-| `#fresh-btn` | click | L572-L579 | Sets `useIncremental = false`, toggles button styles |
-| `#reanalyze-btn` | click | L323-L328 | Shows analyze section, hides reanalyze section |
-| `#change-branches-btn` | click | L589-L635 | Loads branches for all repos in parallel, renders branch editor dropdowns |
-| `#cancel-branches-btn` | click | L637-L640 | Hides branch editor, re-enables change button |
-| `#apply-branches-btn` | click | L642-L683 | Collects branch selections, PUTs to update, re-fetches project+estimate |
-| `#select-all-components` (checkbox) | change | L268-L279 | Toggles all `.component-checkbox` elements |
-| `.component-checkbox` (each) | change | L263-L265 | Calls `onComponentSelectionChange` |
+| `.estimate-card` (each) | click, keydown (Enter/Space) | L435-L463 | Selects level card, shows step 3, updates start button. Cards have `role="button"`, `tabindex="0"`, `aria-pressed`. |
+| `#api-key` (input) | input | L343-L359 | Updates start/analyze buttons. Shows/removes format hint if key doesn't start with `sk-ant-`. |
+| `#analyze-components-btn` | click | L372-L431 | Posts to analyze endpoint, polls status every 2s (max 150 retries / ~5 min). On completion, loads components and shows step 2. |
+| `#precise-btn` | click | L468-L485 | Posts to precise estimate endpoint, updates cards and labels |
+| `#start-audit-btn` | click | L525-L549 | Builds audit body (level, apiKey, optional baseAuditId, optional componentIds), posts to `/api/audit/start`, redirects to `/audit.html?auditId=` |
+| `#incremental-btn` | click | L566-L573 | Sets `useIncremental = true`, toggles button styles |
+| `#fresh-btn` | click | L575-L582 | Sets `useIncremental = false`, toggles button styles |
+| `#reanalyze-btn` | click | L326-L331 | Shows analyze section, hides reanalyze section |
+| `#change-branches-btn` | click | L592-L638 | Loads branches for all repos in parallel, renders branch editor dropdowns |
+| `#cancel-branches-btn` | click | L640-L643 | Hides branch editor, re-enables change button |
+| `#apply-branches-btn` | click | L645-L686 | Collects branch selections, PUTs to update, re-fetches project+estimate |
+| `#select-all-components` (checkbox) | change | L271-L282 | Toggles all `.component-checkbox` elements |
+| `.component-checkbox` (each) | change | L266-L268 | Calls `onComponentSelectionChange` |
 
 ---
 
@@ -137,14 +137,14 @@ interface AnalysisStatus {
 |---|---|---|---|
 | GET | `/api/projects/{projectId}` | init | L83 |
 | POST | `/api/estimate` | init | L84 |
-| GET | `/api/projects/{projectId}/components` | loadExistingComponents, poll completion | L212, L405 |
-| POST | `/api/projects/{projectId}/analyze-components` | analyzeBtn click | L378-L380 |
-| GET | `/api/projects/{projectId}/component-analysis/{analysisId}` | poll | L397-L398 |
-| POST | `/api/estimate/components` | updateScopedEstimate | L305 |
-| POST | `/api/estimate/precise` | preciseBtn click | L470 |
-| POST | `/api/audit/start` | startBtn click | L539 |
-| PUT | `/api/projects/{projectId}/branches` | applyBranchesBtn click | L660 |
-| GET | `/api/github/repos/{org}/{repo}/branches` | changeBranchesBtn click | L601-L602 |
+| GET | `/api/projects/{projectId}/components` | loadExistingComponents, poll completion | L215, L408 |
+| POST | `/api/projects/{projectId}/analyze-components` | analyzeBtn click | L381-L383 |
+| GET | `/api/projects/{projectId}/component-analysis/{analysisId}` | poll | L400-L401 |
+| POST | `/api/estimate/components` | updateScopedEstimate | L308 |
+| POST | `/api/estimate/precise` | preciseBtn click | L473 |
+| POST | `/api/audit/start` | startBtn click | L542 |
+| PUT | `/api/projects/{projectId}/branches` | applyBranchesBtn click | L663 |
+| GET | `/api/github/repos/{org}/{repo}/branches` | changeBranchesBtn click | L604-L605 |
 
 ---
 
@@ -217,4 +217,4 @@ The start button disables when no components are selected, but there is no minim
 
 The `changeBranchesBtn` is disabled during branch loading but not re-enabled on error (only on cancel or successful apply).
 
-## [REC] Add a cancel button or link for in-progress component analysis. Consider re-enabling `changeBranchesBtn` in the error path at L631-L634.
+## [REC] Add a cancel button or link for in-progress component analysis. Consider re-enabling `changeBranchesBtn` in the error path at L634-L637.

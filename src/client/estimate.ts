@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     projectData = project;
     renderProjectHeader(project);
-    renderProjectStats(estimate);
+    renderProjectStats(estimate, project.githubOrg);
     const branchBtn = document.getElementById('change-branches-btn');
     if (branchBtn) branchBtn.textContent = project.repos.length === 1 ? 'Change Branch' : 'Change Branches';
     renderEstimateCards(estimate);
@@ -153,10 +153,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Spec: spec/client/estimate.md#renderProjectStats
-  function renderProjectStats(data: EstimateData) {
-    // Compact repo rows: name · files · tokens · branch @ sha
+  function renderProjectStats(data: EstimateData, githubOrg: string) {
+    // Compact repo rows: name ↗ · files · tokens · branch @ sha
+    const externalIcon = '<svg class="icon-external" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 1.5h7v7M10.5 1.5L4 8"/></svg>';
     const rows = data.repoBreakdown.map(r => {
-      const parts: string[] = [escapeHtml(r.repoName)];
+      const repoUrl = `https://github.com/${encodeURIComponent(githubOrg)}/${encodeURIComponent(r.repoName)}`;
+      const nameHtml = `<a href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener" class="repo-link">${escapeHtml(r.repoName)}${externalIcon}</a>`;
+      const parts: string[] = [nameHtml];
       if (r.files) parts.push(`${formatNumber(r.files)} files`);
       if (r.tokens) parts.push(`${formatNumber(r.tokens)} tokens`);
       const branch = r.branch || '';
@@ -667,7 +670,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       projectData = project;
       renderProjectHeader(project);
-      renderProjectStats(estimate);
+      renderProjectStats(estimate, project.githubOrg);
       renderEstimateCards(estimate);
       updatePrecisionLabel(estimate);
       estimateData = estimate;

@@ -33,6 +33,10 @@ interface ProjectDetail {
     stars: number;
     description: string;
     license: string | null;
+    totalFiles: number;
+    totalTokens: number;
+    defaultBranch: string;
+    branch: string | null;
   }>;
   components: Array<{
     id: string;
@@ -97,8 +101,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     hide('project-loading');
     show('project-content');
 
-    setText('project-name', project.name);
-    setText('project-description', project.description || `GitHub org: ${project.githubOrg}`);
+    // Project name = repo names joined
+    const repoNames = project.repos.map(r => r.repoName);
+    const projectTitle = repoNames.length <= 3
+      ? repoNames.join(' + ')
+      : `${repoNames.slice(0, 2).join(' + ')} + ${repoNames.length - 2} more`;
+    setText('project-name', projectTitle || project.name);
+    setText('project-description', `GitHub org: ${project.githubOrg}`);
 
     // Ownership badge
     if (project.ownership) {
@@ -115,15 +124,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newAuditBtn = $('new-audit-btn') as HTMLAnchorElement | null;
     if (newAuditBtn) newAuditBtn.href = `/estimate.html?projectId=${project.id}`;
 
-    // Meta
-    const metaParts = [
-      `<span>Org: ${escapeHtml(project.githubOrg)}</span>`,
-      project.license ? `<span>License: ${escapeHtml(project.license)}</span>` : '',
-      `<span>${project.repos.length} repo${project.repos.length !== 1 ? 's' : ''}</span>`,
-      project.totalFiles ? `<span>${formatNumber(project.totalFiles)} files</span>` : '',
-      project.totalTokens ? `<span>${formatNumber(project.totalTokens)} tokens</span>` : '',
-    ].filter(Boolean);
-    setHtml('project-meta', metaParts.join(''));
+    // Change Branches link → estimate page
+    const branchBtn = $('change-branches-btn') as HTMLAnchorElement | null;
+    if (branchBtn) {
+      branchBtn.href = `/estimate.html?projectId=${project.id}`;
+      branchBtn.textContent = project.repos.length === 1 ? 'Change Branch' : 'Change Branches';
+    }
 
     // Classification
     if (project.category) {
@@ -134,21 +140,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderThreatModel('threat-model-summary', project);
     }
 
-    // Repos — add target="_blank" rel="noopener" for external GitHub links (Issue #71)
-    const reposHtml = project.repos.map(r => `
-      <div class="card" style="margin-bottom: 0.5rem;">
-        <div class="flex-between">
-          <div>
-            <strong>${r.repoUrl ? `<a href="${escapeHtml(r.repoUrl)}" target="_blank" rel="noopener">${escapeHtml(r.repoName)}</a>` : escapeHtml(r.repoName)}</strong>
-            ${r.language ? `<span class="text-sm text-muted"> &middot; ${escapeHtml(r.language)}</span>` : ''}
-            ${r.license ? `<span class="text-sm text-muted"> &middot; ${escapeHtml(r.license)}</span>` : ''}
-          </div>
-          <span class="text-sm text-muted">${r.stars.toLocaleString()} stars</span>
-        </div>
-        ${r.description ? `<p class="text-sm text-muted mt-1">${escapeHtml(r.description)}</p>` : ''}
-      </div>
-    `).join('');
-    setHtml('repos-list', reposHtml);
+    // Repos — compact rows: name ↗ · files · tokens · branch
+    const externalIcon = '<svg class="icon-external" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 1.5h7v7M10.5 1.5L4 8"/></svg>';
+    const reposHtml = project.repos.map(r => {
+      const parts: string[] = [];
+      const nameHtml = r.repoUrl
+        ? `<a href="${escapeHtml(r.repoUrl)}" target="_blank" rel="noopener" class="repo-link">${escapeHtml(r.repoName)}${externalIcon}</a>`
+        : escapeHtml(r.repoName);
+      parts.push(nameHtml);
+      if (r.totalFiles) parts.push(`${formatNumber(r.totalFiles)} files`);
+      if (r.totalTokens) parts.push(`${formatNumber(r.totalTokens)} tokens`);
+      const branch = r.branch || r.defaultBranch || '';
+      if (branch) parts.push(escapeHtml(branch));
+      return `<div class="repo-row">${parts.join(' &middot; ')}</div>`;
+    }).join('');
+
+    let totalHtml = '';
+    if (project.repos.length > 1) {
+      const totalFiles = project.repos.reduce((s, r) => s + (r.totalFiles || 0), 0);
+      const totalTokens = project.repos.reduce((s, r) => s + (r.totalTokens || 0), 0);
+      totalHtml = `<hr style="margin: 0.5rem 0"><div class="repo-row"><strong>Total &middot; ${formatNumber(totalFiles)} files &middot; ${formatNumber(totalTokens)} tokens</strong></div>`;
+    }
+    setHtml('repos-list', reposHtml + totalHtml);
   }
 
   // Spec: spec/client/project.md#renderComponents

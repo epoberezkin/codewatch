@@ -44,7 +44,6 @@
                     <a class="btn btn-sm btn-primary" id="new-audit-btn" href="#">New Audit</a>
                 </div>
                 <p class="text-muted mt-1" id="project-description"></p>
-                <div class="audit-meta mt-1" id="project-meta"></div>
             </div>
         </div>
 
@@ -59,12 +58,11 @@
 
         <!-- Repos -->
         <div class="card mb-2" id="repos-section">
-            <h2 class="mb-1">Repositories</h2>
-            <div id="repos-list">
-                <div class="loading-overlay">
-                    <div class="spinner"></div>
-                </div>
+            <div class="flex-between">
+                <h2>Repositories</h2>
+                <a class="btn btn-sm btn-secondary" id="change-branches-btn" href="#">Change Branches</a>
             </div>
+            <div id="repos-list" class="mt-1"></div>
         </div>
 
         <!-- Components -->

@@ -38,7 +38,6 @@
             <div class="hidden" id="header-content">
                 <h1 id="project-name"><span id="ownership-badge"></span></h1>
                 <p class="text-muted" id="project-description"></p>
-                <div class="audit-meta mt-1" id="project-meta"></div>
             </div>
         </div>
 
@@ -58,17 +57,13 @@
         <!-- Clone errors notice -->
         <div class="notice notice-error hidden" id="clone-errors"></div>
 
-        <!-- Project Overview (files, tokens, repo breakdown — no costs) -->
+        <!-- Repositories -->
         <div class="card mb-2" id="project-stats">
             <div class="flex-between">
-                <h3>Project Overview</h3>
+                <h3>Repositories</h3>
                 <button class="btn btn-sm btn-secondary" id="change-branches-btn">Change Branches</button>
             </div>
-            <div class="audit-meta mt-1" id="stats-content">
-                <span id="stat-files">-- files</span>
-                <span id="stat-tokens">-- tokens</span>
-            </div>
-            <div id="repo-breakdown" class="mt-1 text-sm text-muted"></div>
+            <div id="repo-breakdown" class="mt-1"></div>
             <!-- Branch editor (hidden) -->
             <div class="hidden mt-2" id="branch-editor">
                 <div id="branch-editor-repos"></div>

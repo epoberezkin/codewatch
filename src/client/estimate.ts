@@ -87,6 +87,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     projectData = project;
     renderProjectHeader(project);
     renderProjectStats(estimate);
+    const branchBtn = document.getElementById('change-branches-btn');
+    if (branchBtn) branchBtn.textContent = project.repos.length === 1 ? 'Change Branch' : 'Change Branches';
     renderEstimateCards(estimate);
     updatePrecisionLabel(estimate);
     updateAnalysisCostHint(estimate);
@@ -141,28 +143,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderProjectHeader(project: ProjectData) {
     hide('header-loading');
     show('header-content');
-    setText('project-name', project.name);
-    setText('project-description', project.description || `GitHub org: ${project.githubOrg}`);
-    const metaHtml = project.repos.map(r => {
-      const branchLabel = r.branch || r.defaultBranch || '';
-      return `<span>${escapeHtml(r.repoName)}${r.language ? ` (${escapeHtml(r.language)})` : ''}${branchLabel ? ` @ ${escapeHtml(branchLabel)}` : ''}</span>`;
-    }).join('');
-    setHtml('project-meta', metaHtml);
+    // Project name = repo names joined
+    const repoNames = project.repos.map(r => r.repoName);
+    const projectTitle = repoNames.length <= 3
+      ? repoNames.join(' + ')
+      : `${repoNames.slice(0, 2).join(' + ')} + ${repoNames.length - 2} more`;
+    setText('project-name', projectTitle || project.name);
+    setText('project-description', `GitHub org: ${project.githubOrg}`);
   }
 
   // Spec: spec/client/estimate.md#renderProjectStats
   function renderProjectStats(data: EstimateData) {
-    setText('stat-files', `${formatNumber(data.totalFiles)} files`);
-    setText('stat-tokens', `${formatNumber(data.totalTokens)} tokens`);
+    // Compact repo rows: name · files · tokens · branch @ sha
+    const rows = data.repoBreakdown.map(r => {
+      const parts: string[] = [escapeHtml(r.repoName)];
+      if (r.files) parts.push(`${formatNumber(r.files)} files`);
+      if (r.tokens) parts.push(`${formatNumber(r.tokens)} tokens`);
+      const branch = r.branch || '';
+      const sha = r.headSha ? r.headSha.substring(0, 7) : '';
+      if (branch && sha) parts.push(`${escapeHtml(branch)} @ ${sha}`);
+      else if (branch) parts.push(escapeHtml(branch));
+      else if (sha) parts.push(`@ ${sha}`);
+      return `<div class="repo-row">${parts.join(' &middot; ')}</div>`;
+    });
 
-    // Repo breakdown
-    if (data.repoBreakdown && data.repoBreakdown.length > 0) {
-      const breakdownHtml = data.repoBreakdown.map(r => {
-        const sha = r.headSha ? ` @ <code>${escapeHtml(r.headSha.substring(0, 7))}</code>` : '';
-        return `<span>${escapeHtml(r.repoName)}: ${formatNumber(r.files)} files, ${formatNumber(r.tokens)} tokens${sha}</span>`;
-      }).join('<br>');
-      setHtml('repo-breakdown', breakdownHtml);
+    if (data.repoBreakdown.length > 1) {
+      rows.push(`<hr style="margin: 0.5rem 0">`);
+      rows.push(`<div class="repo-row"><strong>Total &middot; ${formatNumber(data.totalFiles)} files &middot; ${formatNumber(data.totalTokens)} tokens</strong></div>`);
     }
+    setHtml('repo-breakdown', rows.join(''));
   }
 
   // Spec: spec/client/estimate.md#updatePrecisionLabel

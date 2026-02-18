@@ -30,9 +30,8 @@ Configure and start a security audit with full cost transparency. The page loads
 
 | Element | Detail |
 |---|---|
-| Project name | `#project-name` -- plain text from `ProjectData.name` |
-| Description | `#project-description` -- falls back to `"GitHub org: <org>"` when empty |
-| Metadata row | `#project-meta` -- one `<span>` per repo showing `repoName (language) @ branch` |
+| Project name | `#project-name` -- derived from repo names: 1-3 repos joined with " + ", 4+ shows first 2 + "N more" |
+| Description | `#project-description` -- always `GitHub org: <org>` |
 | Ownership badge | `#ownership-badge` -- rendered inside the `<h1>` via `renderOwnershipBadge()` |
 
 **Ownership badge states:**
@@ -67,19 +66,17 @@ When incremental is chosen and the audit is started, `baseAuditId` is sent in th
 
 If `EstimateData.cloneErrors` is non-empty, a `notice-error` div lists each failed repo and its error message as `<li>` items. The page continues to function for repos that did clone successfully.
 
-### 4. Project Stats (Project Overview)
+### 4. Repositories
 
 **Container:** `#project-stats` card.
 
 | Element | Source |
 |---|---|
-| Files count | `EstimateData.totalFiles` -- formatted with `formatNumber()` |
-| Token count | `EstimateData.totalTokens` -- formatted with `formatNumber()` |
-| Per-repo breakdown | `EstimateData.repoBreakdown[]` -- shows `repoName: N files, M tokens @ <sha7>` per repo |
+| Per-repo breakdown | Compact repo rows: each shows `repoName · N files · N tokens · branch @ sha`. Multi-repo projects show an hr + Total row with combined files and tokens. |
 
 #### Branch Editor
 
-Toggled by the **Change Branches** button (`#change-branches-btn`).
+Toggled by the **Change Branches** button (`#change-branches-btn`). Button text is singular ("Change Branch") for single-repo, plural ("Change Branches") for multi-repo.
 
 **Flow:**
 1. Click "Change Branches" -- button disables, editor div (`#branch-editor`) shows, spinner while loading.

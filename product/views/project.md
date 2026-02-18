@@ -23,12 +23,12 @@ Redirects to `/` if `projectId` query parameter is missing.
 Top card, always visible. Shows a loading spinner while the API call is in flight.
 
 - **Project name** (`<h1>`, inline) and **ownership badge** (inline `<span>`):
+  - Name is derived from repo names: 1-3 repos joined with " + ", 4+ shows first 2 + "N more".
   - `owner` badge (green) when the current user is a verified GitHub org owner.
   - `re-auth needed` link (yellow, links to `/auth/github?returnTo=...`) when the user has a stale token and is not yet verified as owner (`renderOwnershipBadge` from common.ts handles this logic).
   - No badge for anonymous visitors or non-members.
 - **"New Audit" button** (top-right): links to `/estimate.html?projectId=<id>`.
-- **Description**: project description, or fallback `"GitHub org: <org>"` when description is empty.
-- **Metadata row** (`.audit-meta`): Org name, license (if set), repo count, file count (formatted with `formatNumber`), token count (formatted).
+- **Description**: Always shows `GitHub org: <org>`.
 
 ### 2. Classification & Threat Model
 
@@ -46,12 +46,11 @@ Hidden by default; shown only when `project.category` is set.
 
 Always visible. Shows a spinner while loading.
 
-Each repository is rendered as a card containing:
-- **Repo name**: linked to GitHub URL (`target="_blank" rel="noopener"`) when `repoUrl` is present, plain text otherwise.
-- **Language** (if set): dot-separated, muted text.
-- **License** (if set): dot-separated, muted text.
-- **Stars**: right-aligned, locale-formatted number.
-- **Description** (if set): muted text below the header row.
+Each repository is rendered as a compact row showing: repo name with external link icon (links to GitHub), files count, tokens count, branch name. Parts separated by middots.
+
+Multi-repo projects show an `<hr>` divider followed by a Total row with combined files and tokens.
+
+**Change Branches** link (top-right, alongside Repositories heading): navigates to `/estimate.html?projectId=<id>`. Button text is singular ("Change Branch") for single-repo, plural ("Change Branches") for multi-repo.
 
 ### 4. Components
 

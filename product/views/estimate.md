@@ -91,7 +91,7 @@ Toggled by the **Change Branches** button (`#change-branches-btn`). Button text 
 
 ### 5. Audit Levels
 
-**Container:** `#estimate-grid` -- three `.estimate-card` divs.
+**Container:** `#estimate-grid` -- three `.estimate-card` divs. Positioned below Component Selection (step 2), above Start Audit (step 3).
 
 | Card | `data-level` | Coverage | Description |
 |---|---|---|---|
@@ -103,7 +103,7 @@ Each card shows estimated cost in USD via `formatUSD()` with `<small>estimated</
 
 **States:**
 - **Disabled** (class `disabled`): Cards start disabled. Clicks are ignored. Hint text reads "Run component analysis to enable selection."
-- **Enabled**: After component analysis completes, `disabled` class is removed and hint is hidden.
+- **Enabled**: After component analysis completes, `disabled` class is removed, hint is hidden, and "thorough" is pre-selected if no level was already chosen (showing step 3 immediately).
 - **Selected** (class `selected`): Exclusive -- clicking one deselects all others. Sets `aria-pressed="true"`. Reveals Step 3 (`#step-3`).
 
 **Keyboard accessible:** `role="button"`, `tabindex="0"`. Enter and Space activate the card.
@@ -247,7 +247,7 @@ Page Load
   |
   +-- GET /api/projects/:id/components  (if authenticated)
   |     |
-  |     +-- components found? --> showStep2() --> enableCards()
+  |     +-- components found? --> showStep2() --> enableCards() (pre-selects thorough)
   |
   [User enters API key]
   |
@@ -255,7 +255,7 @@ Page Load
   |     |
   |     +-- poll GET .../component-analysis/:id  (every 2s, max 150)
   |     |     |
-  |     |     +-- completed --> GET .../components --> showStep2()
+  |     |     +-- completed --> GET .../components --> showStep2() --> enableCards() (pre-selects thorough)
   |     |     +-- failed --> error toast, reset UI
   |     |     +-- timeout --> error toast, reset UI
   |
@@ -263,7 +263,7 @@ Page Load
   |
   +-- POST /api/estimate/components  (on each selection change)
   |
-  [User selects level] --> show step-3
+  [User optionally changes level]
   |
   [User clicks Start]
   |
@@ -294,7 +294,8 @@ EstimateData {
   estimates: { full, thorough, opportunistic } (each: { files, tokens, costUsd }),
   previousAudit?: { id, createdAt, level, maxSeverity },
   isPrecise: boolean,
-  cloneErrors?: [{ repoName, error }]
+  cloneErrors?: [{ repoName, error }],
+  analysisCostHint?: { costUsd, isEmpirical }
 }
 
 ProjectData {

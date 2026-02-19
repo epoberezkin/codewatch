@@ -74,31 +74,6 @@
             </div>
         </div>
 
-        <!-- Audit Level Cards (costs on cards; disabled until component analysis complete) -->
-        <h3 class="mb-1">Audit Levels</h3>
-        <div class="estimate-grid" id="estimate-grid">
-            <div class="estimate-card disabled" data-level="full" role="button" tabindex="0">
-                <h3>Full Audit</h3>
-                <p class="description">Every line of code analyzed exhaustively. All OWASP Top 10, CWE Top 25, and language-specific vulnerabilities checked.</p>
-                <div class="price" id="price-full">--</div>
-            </div>
-            <div class="estimate-card disabled" data-level="thorough" role="button" tabindex="0">
-                <h3>Thorough Audit</h3>
-                <p class="description">Focused on security-critical paths: auth, crypto, input validation, database queries, and API endpoints (~33% of codebase).</p>
-                <div class="price" id="price-thorough">--</div>
-            </div>
-            <div class="estimate-card disabled" data-level="opportunistic" role="button" tabindex="0">
-                <h3>Opportunistic Audit</h3>
-                <p class="description">Claude identifies and deeply analyzes the most critical ~10% of the codebase. Targeted, high-signal assessment.</p>
-                <div class="price" id="price-opportunistic">--</div>
-            </div>
-        </div>
-        <div class="text-sm text-muted mb-2" id="cards-footer">
-            <span id="estimate-precision">Approximate estimate (&plusmn;15%)</span>
-            <button class="btn btn-sm btn-secondary" id="precise-btn" style="margin-left: 0.5rem;">Get Precise Estimate</button>
-            <span id="cards-hint"> &middot; Run component analysis to enable selection.</span>
-        </div>
-
         <!-- API Key -->
         <div class="card mb-2" id="api-key-section">
             <h3 class="mb-2">Anthropic API Key</h3>
@@ -114,7 +89,7 @@
             <h3 class="mb-2">Component Analysis</h3>
             <p class="text-muted mb-1">Analyze project structure and security profiles to refine audit scope.</p>
             <div id="component-not-analyzed">
-                <p class="text-sm text-muted mb-1">Uses Opus 4.5 (<span id="analysis-cost-hint">estimating...</span>).</p>
+                <p class="text-sm text-muted mb-1">Uses Opus 4.5, <span id="analysis-cost-hint">estimating...</span></p>
                 <button class="btn btn-primary" id="analyze-components-btn" disabled>Analyze Components</button>
             </div>
             <div class="hidden" id="component-analyzing">
@@ -150,6 +125,31 @@
                 </table>
                 <div class="mt-2 text-sm text-muted" id="scoped-estimate-label"></div>
             </div>
+        </div>
+
+        <!-- Audit Level Cards (disabled until component analysis complete) -->
+        <h3 class="mb-1">Audit Levels</h3>
+        <div class="estimate-grid" id="estimate-grid">
+            <div class="estimate-card disabled" data-level="full" role="button" tabindex="0">
+                <h3>Full Audit</h3>
+                <p class="description">Every line of code analyzed exhaustively. All OWASP Top 10, CWE Top 25, and language-specific vulnerabilities checked.</p>
+                <div class="price" id="price-full">--</div>
+            </div>
+            <div class="estimate-card disabled" data-level="thorough" role="button" tabindex="0">
+                <h3>Thorough Audit</h3>
+                <p class="description">Focused on security-critical paths: auth, crypto, input validation, database queries, and API endpoints (~33% of codebase).</p>
+                <div class="price" id="price-thorough">--</div>
+            </div>
+            <div class="estimate-card disabled" data-level="opportunistic" role="button" tabindex="0">
+                <h3>Opportunistic Audit</h3>
+                <p class="description">Claude identifies and deeply analyzes the most critical ~10% of the codebase. Targeted, high-signal assessment.</p>
+                <div class="price" id="price-opportunistic">--</div>
+            </div>
+        </div>
+        <div class="text-sm text-muted mb-2" id="cards-footer">
+            <span id="estimate-precision">Approximate estimate (&plusmn;15%)</span>
+            <button class="btn btn-sm btn-secondary" id="precise-btn" style="margin-left: 0.5rem;">Get Precise Estimate</button>
+            <span id="cards-hint"> &middot; Run component analysis to enable selection.</span>
         </div>
 
         <!-- Start Audit (hidden until mode selected) -->

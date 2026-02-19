@@ -772,6 +772,23 @@ router.put('/projects/:id/branches', requireAuth as any, async (req: Request, re
 // Estimation
 // ============================================================
 
+// Empirical analysis cost: query completed analyses with known project token counts
+async function getAnalysisCostHint(pool: ReturnType<typeof getPool>, projectTokens: number): Promise<{ costUsd: number; isEmpirical: boolean }> {
+  const { rows } = await pool.query(
+    `SELECT ca.cost_usd, p.total_tokens
+     FROM component_analyses ca
+     JOIN projects p ON p.id = ca.project_id
+     WHERE ca.status = 'completed' AND ca.cost_usd > 0 AND p.total_tokens > 0`
+  );
+  if (rows.length > 0) {
+    const totalCost = rows.reduce((s: number, r: any) => s + parseFloat(r.cost_usd), 0);
+    const totalTok = rows.reduce((s: number, r: any) => s + r.total_tokens, 0);
+    const costPer100k = (totalCost / totalTok) * 100_000;
+    return { costUsd: (projectTokens / 100_000) * costPer100k, isEmpirical: true };
+  }
+  return { costUsd: (projectTokens / 100_000) * 0.25, isEmpirical: false };
+}
+
 // POST /api/estimate — rough estimation
 router.post('/estimate', async (req: Request, res: Response) => {
   const { projectId } = req.body;
@@ -874,24 +891,7 @@ router.post('/estimate', async (req: Request, res: Response) => {
       [projectId]
     );
 
-    // Empirical analysis cost: query completed analyses with known project token counts
-    let analysisCostHint: { costUsd: number; isEmpirical: boolean } | undefined;
-    const { rows: empiricalRows } = await pool.query(
-      `SELECT ca.cost_usd, p.total_tokens
-       FROM component_analyses ca
-       JOIN projects p ON p.id = ca.project_id
-       WHERE ca.status = 'completed' AND ca.cost_usd > 0 AND p.total_tokens > 0`
-    );
-    if (empiricalRows.length > 0) {
-      // Weighted average: cost per 100k tokens across all completed analyses
-      const totalCost = empiricalRows.reduce((s: number, r: any) => s + parseFloat(r.cost_usd), 0);
-      const totalTok = empiricalRows.reduce((s: number, r: any) => s + r.total_tokens, 0);
-      const costPer100k = (totalCost / totalTok) * 100_000;
-      analysisCostHint = { costUsd: (totalTokens / 100_000) * costPer100k, isEmpirical: true };
-    } else {
-      // Fallback: $0.25 per 100k tokens
-      analysisCostHint = { costUsd: (totalTokens / 100_000) * 0.25, isEmpirical: false };
-    }
+    const analysisCostHint = await getAnalysisCostHint(pool, totalTokens);
 
     const result: any = {
       totalFiles,
@@ -1041,6 +1041,8 @@ router.post('/estimate/precise', async (req: Request, res: Response) => {
     // Compute costs using precise token count
     const estimate = await estimateCostsFromTokenCount(pool, allFiles.length, totalPreciseTokens);
 
+    const analysisCostHint = await getAnalysisCostHint(pool, totalPreciseTokens);
+
     res.json({
       totalFiles: allFiles.length,
       totalTokens: totalPreciseTokens,
@@ -1048,6 +1050,7 @@ router.post('/estimate/precise', async (req: Request, res: Response) => {
       estimates: estimate.estimates,
       isPrecise: true,
       cloneErrors: cloneErrors.length > 0 ? cloneErrors : undefined,
+      analysisCostHint,
     });
   } catch (err) {
     console.error('Error computing precise estimate:', err);

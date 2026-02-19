@@ -243,11 +243,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Spec: spec/client/estimate.md#enableCards
   function enableCards() {
-    document.querySelectorAll<HTMLElement>('.estimate-card').forEach(card => {
+    const cards = document.querySelectorAll<HTMLElement>('.estimate-card');
+    cards.forEach(card => {
       card.classList.remove('disabled');
     });
     const hint = $('cards-hint');
     if (hint) hint.style.display = 'none';
+
+    // Pre-select thorough if no level selected yet
+    if (!selectedLevel) {
+      const thorough = document.querySelector<HTMLElement>('.estimate-card[data-level="thorough"]');
+      if (thorough) {
+        cards.forEach(c => { c.classList.remove('selected'); c.setAttribute('aria-pressed', 'false'); });
+        thorough.classList.add('selected');
+        thorough.setAttribute('aria-pressed', 'true');
+        selectedLevel = 'thorough';
+        show('step-3');
+        updateStartButton();
+      }
+    }
   }
 
   // Spec: spec/client/estimate.md#renderComponentTable
@@ -476,6 +490,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     preciseBtn.textContent = 'Calculating...';
     try {
       const precise = await apiPost<EstimateData>('/api/estimate/precise', { projectId });
+      renderProjectStats(precise, projectData!.githubOrg);
       renderEstimateCards(precise);
       updatePrecisionLabel(precise);
       updateAnalysisCostHint(precise);

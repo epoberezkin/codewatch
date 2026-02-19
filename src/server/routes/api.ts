@@ -874,6 +874,25 @@ router.post('/estimate', async (req: Request, res: Response) => {
       [projectId]
     );
 
+    // Empirical analysis cost: query completed analyses with known project token counts
+    let analysisCostHint: { costUsd: number; isEmpirical: boolean } | undefined;
+    const { rows: empiricalRows } = await pool.query(
+      `SELECT ca.cost_usd, p.total_tokens
+       FROM component_analyses ca
+       JOIN projects p ON p.id = ca.project_id
+       WHERE ca.status = 'completed' AND ca.cost_usd > 0 AND p.total_tokens > 0`
+    );
+    if (empiricalRows.length > 0) {
+      // Weighted average: cost per 100k tokens across all completed analyses
+      const totalCost = empiricalRows.reduce((s: number, r: any) => s + parseFloat(r.cost_usd), 0);
+      const totalTok = empiricalRows.reduce((s: number, r: any) => s + r.total_tokens, 0);
+      const costPer100k = (totalCost / totalTok) * 100_000;
+      analysisCostHint = { costUsd: (totalTokens / 100_000) * costPer100k, isEmpirical: true };
+    } else {
+      // Fallback: $0.25 per 100k tokens
+      analysisCostHint = { costUsd: (totalTokens / 100_000) * 0.25, isEmpirical: false };
+    }
+
     const result: any = {
       totalFiles,
       totalTokens,
@@ -881,6 +900,7 @@ router.post('/estimate', async (req: Request, res: Response) => {
       estimates: estimate.estimates,
       isPrecise: false,
       cloneErrors: cloneErrors.length > 0 ? cloneErrors : undefined,
+      analysisCostHint,
     };
 
     if (prevAudits.length > 0) {

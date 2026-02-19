@@ -16,6 +16,7 @@ interface EstimateData {
   previousAudit?: { id: string; createdAt: string; level: string; maxSeverity: string };
   isPrecise: boolean;
   cloneErrors?: Array<{ repoName: string; error: string }>;
+  analysisCostHint?: { costUsd: number; isEmpirical: boolean };
 }
 
 interface ProjectData {
@@ -199,12 +200,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Spec: spec/client/estimate.md#updateAnalysisCostHint
   function updateAnalysisCostHint(data: EstimateData) {
-    // Component analysis uses ~5% of total project tokens (same as OVERHEAD_MULTIPLIER in tokens.ts)
-    const analysisTokens = data.totalTokens * 0.05;
-    const inputCost = (analysisTokens / 1_000_000) * 5;    // Opus 4.5: $5/Mtok input
-    const outputCost = (analysisTokens * 0.15 / 1_000_000) * 25; // ~15% output ratio, $25/Mtok
-    const cost = inputCost + outputCost;
-    setText('analysis-cost-hint', `~${formatUSD(cost)} for analysis`);
+    if (data.analysisCostHint) {
+      const label = data.analysisCostHint.isEmpirical
+        ? 'based on empirical data'
+        : 'rough estimate, no empirical data';
+      setText('analysis-cost-hint', `~${formatUSD(data.analysisCostHint.costUsd)} for analysis (${label})`);
+    } else {
+      // Fallback: $0.25 per 100k tokens
+      const cost = (data.totalTokens / 100_000) * 0.25;
+      setText('analysis-cost-hint', `~${formatUSD(cost)} for analysis (rough estimate, no empirical data)`);
+    }
   }
 
   // ---- Component Loading ----

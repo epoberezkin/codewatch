@@ -260,11 +260,11 @@ Rough cost estimation. Clones/updates repos, scans code files, computes rough to
 |---|---|
 | **Auth** | None required |
 | **Body** | `{ projectId: string }` |
-| **Response (200)** | `{ totalFiles, totalTokens, repoBreakdown: Array<{ repoName, files, tokens, headSha?, branch? }>, estimates, isPrecise: false, cloneErrors?, previousAudit? }` |
+| **Response (200)** | `{ totalFiles, totalTokens, repoBreakdown: Array<{ repoName, files, tokens, headSha?, branch? }>, estimates, isPrecise: false, cloneErrors?, previousAudit?, analysisCostHint: { costUsd, isEmpirical } }` |
 | **Response (400)** | Missing `projectId` |
 | **Response (404)** | Project not found or no repos |
 | **Response (500)** | `{ error }` |
-| **DB reads** | `repositories`, `project_repos`, `audits` (last completed) |
+| **DB reads** | `repositories`, `project_repos`, `audits` (last completed), `component_analyses` + `projects` (empirical cost data) |
 | **DB writes** | `UPDATE repositories` (total_files, total_tokens, last_cloned_at, default_branch), `UPDATE projects` (total_files, total_tokens) |
 | **External** | `cloneOrUpdate`, `scanCodeFiles`, `getDefaultBranchName`, `roughTokenCount`, `estimateCosts` |
 | **Business logic** | Auto-detects and updates default branch from cloned repo. Includes previous audit info if available. Clone errors are non-fatal; repos that fail are included with zero files/tokens. |

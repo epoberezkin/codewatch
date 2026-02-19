@@ -10,6 +10,8 @@ import { BUDGET_PERCENTAGES } from './tokens';
 // ---------- Constants ----------
 
 const PLANNING_MODEL = 'claude-opus-4-5-20251101';
+const TARGET_FILES_PER_BATCH = 250;
+const MIN_BATCH_SIZE = 25;
 
 // ---------- Types ----------
 
@@ -199,11 +201,76 @@ export async function runPlanningCall(
     'You are a security audit planner. Return valid JSON only.',
     prompt,
     PLANNING_MODEL,
-    16384,
   );
 
   const rankedFiles = parseJsonResponse<RankedFile[]>(response.content);
   return { rankedFiles, inputTokens: response.inputTokens, outputTokens: response.outputTokens };
+}
+
+// ---------- Step 2b: Batched Planning with Retry ----------
+
+// Spec: spec/services/planning.md#runPlanningCallWithRetry
+async function runPlanningCallWithRetry(
+  apiKey: string,
+  files: ScannedFile[],
+  grepResults: GrepHit[],
+  componentProfiles: ComponentProfile[],
+  threatModel: string,
+  category: string,
+  description: string,
+  level: string,
+): Promise<{ rankedFiles: RankedFile[]; inputTokens: number; outputTokens: number }> {
+  try {
+    return await runPlanningCall(apiKey, files, grepResults, componentProfiles, threatModel, category, description, level);
+  } catch (err) {
+    if (!(err instanceof SyntaxError)) throw err;
+    const halfSize = Math.ceil(files.length / 2);
+    if (halfSize < MIN_BATCH_SIZE) {
+      throw new Error(`Planning failed for ${files.length} files (min batch: ${MIN_BATCH_SIZE}). Response not valid JSON.`);
+    }
+    console.warn(`[Planning] Parse failed for ${files.length} files, splitting into ${halfSize}+${files.length - halfSize}`);
+    const r1 = await runPlanningCallWithRetry(apiKey, files.slice(0, halfSize), grepResults, componentProfiles, threatModel, category, description, level);
+    const r2 = await runPlanningCallWithRetry(apiKey, files.slice(halfSize), grepResults, componentProfiles, threatModel, category, description, level);
+    return {
+      rankedFiles: [...r1.rankedFiles, ...r2.rankedFiles],
+      inputTokens: r1.inputTokens + r2.inputTokens,
+      outputTokens: r1.outputTokens + r2.outputTokens,
+    };
+  }
+}
+
+// Spec: spec/services/planning.md#runBatchedPlanningCalls
+async function runBatchedPlanningCalls(
+  apiKey: string,
+  files: ScannedFile[],
+  grepResults: GrepHit[],
+  componentProfiles: ComponentProfile[],
+  threatModel: string,
+  category: string,
+  description: string,
+  level: string,
+): Promise<{ rankedFiles: RankedFile[]; inputTokens: number; outputTokens: number }> {
+  if (files.length <= TARGET_FILES_PER_BATCH) {
+    return runPlanningCallWithRetry(apiKey, files, grepResults, componentProfiles, threatModel, category, description, level);
+  }
+
+  const batches: ScannedFile[][] = [];
+  for (let i = 0; i < files.length; i += TARGET_FILES_PER_BATCH) {
+    batches.push(files.slice(i, i + TARGET_FILES_PER_BATCH));
+  }
+
+  const allRanked: RankedFile[] = [];
+  let totalIn = 0, totalOut = 0;
+
+  for (let i = 0; i < batches.length; i++) {
+    console.log(`[Planning] Batch ${i + 1}/${batches.length} (${batches[i].length} files)`);
+    const r = await runPlanningCallWithRetry(apiKey, batches[i], grepResults, componentProfiles, threatModel, category, description, level);
+    allRanked.push(...r.rankedFiles);
+    totalIn += r.inputTokens;
+    totalOut += r.outputTokens;
+  }
+
+  return { rankedFiles: allRanked, inputTokens: totalIn, outputTokens: totalOut };
 }
 
 // ---------- Step 3: Token-Budget File Selection ----------
@@ -286,7 +353,7 @@ export async function runPlanningPhase(
         .join('\n')
     : '(no threat model)';
 
-  const planningResult = await runPlanningCall(
+  const planningResult = await runBatchedPlanningCalls(
     apiKey,
     files,
     grepResults,

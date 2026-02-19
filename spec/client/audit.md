@@ -1,6 +1,6 @@
 # audit.ts -- Audit Progress Module
 
-**Source**: [`audit.ts`](../../src/client/audit.ts#L1-L255)
+**Source**: [`audit.ts`](../../src/client/audit.ts#L1-L258)
 **HTML**: `public/audit.html`
 
 ---
@@ -100,7 +100,7 @@ interface AuditStatus {
 |---|---|---|
 | `poll` | `() => Promise<void>` | Fetches audit status. Resets `consecutiveErrors` on success. Computes `isTerminal` flag BEFORE calling `renderStatus` (ensuring the flag survives render errors). Wraps `renderStatus` in try/catch to isolate render errors. Clears interval after render if terminal status (`completed`, `completed_with_warnings`, `failed`). On fetch error, increments counter; at 5 consecutive, stops polling and shows error. |
 
-### [renderStatus](../../src/client/audit.ts#L112-L214)
+### [renderStatus](../../src/client/audit.ts#L112-L217)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -113,13 +113,13 @@ Rendering logic:
 4. **Commit info** (L137-L142): Formats `repoName@sha7` for each commit
 5. **Incremental badge** (L144-L146): Shows "incremental" badge if applicable
 6. **Progress bar** (L148-L173): Calculates percentage, sets fill width, sets status label from status map. Enhanced clone progress: when `detail.type === 'cloning'`, overrides label with `Cloning repositories (current/total: repoName)...`
-7. **File list** (L175-L179): Extracts `files` via type discrimination — only when `detail.type === 'analyzing'` or `detail.type === 'done'`. Delegates to `renderFileList`.
-8. **Findings summary** (L181-L185): Shows total findings count (derived from files if available)
-9. **Warnings** (L187-L194): When `detail.warnings` has entries, shows `#warnings-notice` and populates `#warnings-list` with escaped warning items.
-10. **Completion card** (L196-L207): Shows on `completed` / `completed_with_warnings`. Sets report link, summary text with max severity. Appends warnings note for `completed_with_warnings`.
-11. **Error notice** (L209-L213): Shows on `failed` with error message
+7. **File list** (L175-L182): Extracts `files` via type discrimination — only when `detail.type === 'analyzing'` or `detail.type === 'done'`. Delegates to `renderFileList`. On terminal states (`failed`, `completed`, `completed_with_warnings`) without files, clears the file-list loading spinner.
+8. **Findings summary** (L184-L188): Shows total findings count (derived from files if available)
+9. **Warnings** (L190-L197): When `detail.warnings` has entries, shows `#warnings-notice` and populates `#warnings-list` with escaped warning items.
+10. **Completion card** (L199-L210): Shows on `completed` / `completed_with_warnings`. Sets report link, summary text with max severity. Appends warnings note for `completed_with_warnings`.
+11. **Error notice** (L212-L216): Shows on `failed` with error message
 
-### [renderFileList](../../src/client/audit.ts#L217-L235)
+### [renderFileList](../../src/client/audit.ts#L220-L238)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -139,7 +139,7 @@ Rendering logic:
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `document` | `visibilitychange` | L238-L250 | Pauses polling when tab hidden (`clearInterval`). Resumes with immediate poll when visible. |
+| `document` | `visibilitychange` | L241-L253 | Pauses polling when tab hidden (`clearInterval`). Resumes with immediate poll when visible. |
 
 ---
 
@@ -214,6 +214,6 @@ No timer showing how long the audit has been running (despite having `createdAt`
 
 ## [GAP] Polling Resumes Without Error Count Reset
 
-When the tab becomes visible again (L244-L249), `consecutiveErrors` is not reset. If there were prior errors, the counter carries over, potentially triggering the 5-error stop prematurely.
+When the tab becomes visible again (L247-L252), `consecutiveErrors` is not reset. If there were prior errors, the counter carries over, potentially triggering the 5-error stop prematurely.
 
 ## [REC] Reset `consecutiveErrors = 0` when resuming polling on visibility change. Consider showing elapsed time from `startedAt`.

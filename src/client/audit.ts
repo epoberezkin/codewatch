@@ -176,6 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const files = (detail?.type === 'analyzing' || detail?.type === 'done') ? detail.files : null;
     if (files && files.length > 0) {
       renderFileList(files);
+    } else if (data.status === 'failed' || data.status === 'completed' || data.status === 'completed_with_warnings') {
+      const list = $('file-list');
+      if (list) list.innerHTML = '';
     }
 
     // Findings summary

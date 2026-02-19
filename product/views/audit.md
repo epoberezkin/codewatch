@@ -55,7 +55,7 @@ Shows overall audit progress:
 
 ### File List
 
-Card containing a `<ul>` of files extracted from `progressDetail` via type discrimination. Files are only rendered when `progressDetail.type` is `analyzing` or `done`; unknown or missing types are silently ignored (no crash). Each file item shows:
+Card containing a `<ul>` of files extracted from `progressDetail` via type discrimination. Files are only rendered when `progressDetail.type` is `analyzing` or `done`; unknown or missing types are silently ignored (no crash). On terminal states (`failed`, `completed`, `completed_with_warnings`) without file data, the loading spinner is cleared. Each file item shows:
 
 | Status | Icon | CSS class |
 |---|---|---|

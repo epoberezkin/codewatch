@@ -7,6 +7,7 @@ export interface ClaudeResponse {
   content: string;
   inputTokens: number;
   outputTokens: number;
+  stopReason: string;
 }
 
 // ---------- Retry Config ----------
@@ -46,7 +47,7 @@ export async function callClaude(
   systemPrompt: string,
   userMessage: string,
   model: string = 'claude-opus-4-5-20251101',
-  maxTokens: number = 16384,
+  maxTokens: number = 64000,
 ): Promise<ClaudeResponse> {
   // Disable SDK-level retries; we handle retries ourselves to support long Retry-After waits
   const client = new Anthropic({ apiKey, maxRetries: 0 });
@@ -69,6 +70,7 @@ export async function callClaude(
         content: textContent,
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
+        stopReason: response.stop_reason || 'end_turn',
       };
     } catch (err: unknown) {
       const status = (err as any)?.status;

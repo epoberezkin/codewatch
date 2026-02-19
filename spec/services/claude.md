@@ -10,13 +10,14 @@ Wraps the Anthropic SDK to provide retry-aware API calls for message creation an
 
 ## Types
 
-### `ClaudeResponse` (lines 6-10)
+### `ClaudeResponse` (lines 6-11)
 
 ```ts
 export interface ClaudeResponse {
   content: string;       // concatenated text blocks from the response
   inputTokens: number;   // usage.input_tokens
   outputTokens: number;  // usage.output_tokens
+  stopReason: string;    // SDK StopReason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use' | 'pause_turn' | 'refusal'
 }
 ```
 
@@ -26,18 +27,18 @@ export interface ClaudeResponse {
 
 | Name | Value | Line |
 |------|-------|------|
-| `MAX_RETRIES` | `5` | 14 |
-| Default model | `claude-opus-4-5-20251101` | 48, 111 |
-| Default `maxTokens` | `16384` | 49 |
-| Default Retry-After fallback | `60` seconds | 33 |
-| Rate-limit buffer | `+5` seconds added to Retry-After | 84, 133 |
-| Server-error backoff | `min(10 * 2^attempt, 120)` seconds | 87, 134 |
+| `MAX_RETRIES` | `5` | 15 |
+| Default model | `claude-opus-4-5-20251101` | 49, 113 |
+| Default `maxTokens` | `64000` | 50 |
+| Default Retry-After fallback | `60` seconds | 34 |
+| Rate-limit buffer | `+5` seconds added to Retry-After | 86, 135 |
+| Server-error backoff | `min(10 * 2^attempt, 120)` seconds | 89, 136 |
 
-### `sleep(ms)` (line 16)
+### `sleep(ms)` (line 17)
 
 Returns a `Promise<void>` that resolves after `ms` milliseconds.
 
-### `getRetryAfterSeconds(err)` (lines 20-34)
+### `getRetryAfterSeconds(err)` (lines 21-35)
 
 Extracts the `Retry-After` header from an error object. Tries `headers.get('retry-after')` (Web API Headers) then bracket notation. Returns the parsed integer if positive, otherwise falls back to `60`.
 
@@ -45,7 +46,7 @@ Extracts the `Retry-After` header from an error object. Tries `headers.get('retr
 
 ## Exported Functions
 
-### `callClaude` (lines 44-100)
+### `callClaude` (lines 45-102)
 
 ```ts
 export async function callClaude(
@@ -53,7 +54,7 @@ export async function callClaude(
   systemPrompt: string,
   userMessage: string,
   model?: string,       // default 'claude-opus-4-5-20251101'
-  maxTokens?: number,   // default 16384
+  maxTokens?: number,   // default 64000
 ): Promise<ClaudeResponse>
 ```
 
@@ -62,9 +63,9 @@ export async function callClaude(
 1. Creates a fresh `Anthropic` client per call with `maxRetries: 0` (SDK retries disabled).
 2. Sends a single-turn message (`system` + one `user` message).
 3. Concatenates all `text`-type content blocks into `ClaudeResponse.content`.
-4. Returns token usage from `response.usage`.
+4. Returns token usage from `response.usage` and `stop_reason` (defaults to `'end_turn'` if null).
 
-**Retry logic (lines 54-96):**
+**Retry logic (lines 56-98):**
 
 - Loop: `attempt` from `0` to `MAX_RETRIES` (6 total attempts).
 - Retries on HTTP `429` (rate limit) and `5xx` (server error).
@@ -72,13 +73,13 @@ export async function callClaude(
 - Server error wait: exponential backoff `min(10 * 2^attempt, 120)` s.
 - Logs each retry to `console.log` with status, wait time, and attempt number.
 - Non-retryable errors or final attempt: rethrows the original error.
-- Unreachable fallback at line 99 throws `Error('Exhausted all retries calling Claude API')`.
+- Unreachable fallback at line 101 throws `Error('Exhausted all retries calling Claude API')`.
 
 **Security:** API key is passed per-call and never stored. [GAP] No validation that `apiKey` is non-empty before creating the client.
 
 ---
 
-### `countTokens` (lines 107-145)
+### `countTokens` (lines 109-147)
 
 ```ts
 export async function countTokens(
@@ -94,13 +95,13 @@ export async function countTokens(
 1. Calls `client.messages.countTokens()` -- Anthropic's free token-counting endpoint.
 2. Returns `result.input_tokens`.
 
-**Retry logic (lines 115-141):** Identical structure to `callClaude` -- same conditions, same backoff, same `MAX_RETRIES`. Log prefix is `[countTokens]`.
+**Retry logic (lines 118-143):** Identical structure to `callClaude` -- same conditions, same backoff, same `MAX_RETRIES`. Log prefix is `[countTokens]`.
 
-**Note from JSDoc (lines 102-104):** Intended to use a service key (`ANTHROPIC_SERVICE_KEY`), but the signature accepts `apiKey` as a plain parameter. [GAP] The comment says "service key" but the caller is responsible for passing the correct key; nothing enforces this distinction.
+**Note from JSDoc (lines 104-107):** Intended to use a service key (`ANTHROPIC_SERVICE_KEY`), but the signature accepts `apiKey` as a plain parameter. [GAP] The comment says "service key" but the caller is responsible for passing the correct key; nothing enforces this distinction.
 
 ---
 
-### `parseJsonResponse<T>` (lines 152-190)
+### `parseJsonResponse<T>` (lines 154-192)
 
 ```ts
 export function parseJsonResponse<T>(content: string): T
@@ -110,12 +111,12 @@ export function parseJsonResponse<T>(content: string): T
 
 | Stage | Lines | Strategy |
 |-------|-------|----------|
-| 1 | 155-158 | Direct `JSON.parse` on trimmed input |
-| 2 | 160-166 | Strip markdown code fences (` ```json ` or ` ``` `) and parse inner content |
-| 3 | 168-175 | Find outermost `{ ... }` by first/last brace and parse |
-| 4 | 177-184 | Find outermost `[ ... ]` by first/last bracket and parse |
+| 1 | 157-160 | Direct `JSON.parse` on trimmed input |
+| 2 | 162-168 | Strip markdown code fences (` ```json ` or ` ``` `) and parse inner content |
+| 3 | 170-177 | Find outermost `{ ... }` by first/last brace and parse |
+| 4 | 179-186 | Find outermost `[ ... ]` by first/last bracket and parse |
 
-If all stages fail, throws `SyntaxError` with the first 120 characters of input for debugging (line 187).
+If all stages fail, throws `SyntaxError` with the first 120 characters of input for debugging (line 189).
 
 [GAP] The generic `<T>` is unchecked at runtime -- the parsed JSON is cast without schema validation. Callers must trust Claude's output shape.
 

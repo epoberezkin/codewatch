@@ -27,6 +27,7 @@ vi.mock('../../src/server/services/claude', () => ({
       content: mockClaudeState.responseContent,
       inputTokens: 1000,
       outputTokens: 500,
+      stopReason: 'end_turn',
     };
   },
   parseJsonResponse: <T>(content: string): T => {

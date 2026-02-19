@@ -56,6 +56,48 @@ interface AuditOptions {
   componentIds?: string[];
 }
 
+// ---- progress_detail discriminated union ----
+
+interface FileProgress {
+  file: string;
+  status: string;       // 'pending' | 'done' | 'error'
+  findingsCount: number;
+}
+
+interface ProgressBase {
+  warnings: string[];
+}
+
+interface ProgressCloning extends ProgressBase {
+  type: 'cloning';
+  current: number;
+  total: number;
+  repoName: string;
+}
+
+interface ProgressPlanning extends ProgressBase {
+  type: 'planning';
+}
+
+interface ProgressAnalyzing extends ProgressBase {
+  type: 'analyzing';
+  files: FileProgress[];
+}
+
+interface ProgressDone extends ProgressBase {
+  type: 'done';
+  files: FileProgress[];
+}
+
+type ProgressDetail = ProgressCloning | ProgressPlanning | ProgressAnalyzing | ProgressDone;
+
+function writeProgress(pool: Pool, auditId: string, detail: ProgressDetail): Promise<void> {
+  return pool.query(
+    `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
+    [JSON.stringify(detail), auditId]
+  ).then(() => {});
+}
+
 const MAX_BATCH_TOKENS = 150000;
 
 // ---------- Main Orchestrator ----------
@@ -64,6 +106,7 @@ const MAX_BATCH_TOKENS = 150000;
 export async function runAudit(pool: Pool, options: AuditOptions): Promise<void> {
   const { auditId, projectId, level, apiKey } = options;
   let actualCostUsd = 0;
+  const warnings: string[] = [];
 
   try {
     // ---- Step 0: Clone repos ----
@@ -120,10 +163,9 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       const repo = repos[repoIdx];
 
       // Update clone progress
-      await pool.query(
-        `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
-        [JSON.stringify({ clone_progress: `Cloning ${repoIdx + 1}/${repos.length}: ${repo.repo_name}` }), auditId]
-      );
+      await writeProgress(pool, auditId, {
+        type: 'cloning', current: repoIdx + 1, total: repos.length, repoName: repo.repo_name, warnings,
+      });
       console.log(`[Audit ${auditId.substring(0, 8)}] Cloning ${repoIdx + 1}/${repos.length}: ${repo.repo_name}`);
 
       const repoShallowSince = shallowSinceMap.get(repo.repo_url);
@@ -227,10 +269,10 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
           // Shallow clone may not contain the base SHA — treat all files as added (#20)
           const msg = `diff failed for ${repo.name} (base SHA may be outside shallow history), auditing all files`;
           console.warn(`[Audit ${auditId.substring(0, 8)}] ${msg}:`, (diffErr as Error).message);
-          await pool.query(
-            `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
-            [JSON.stringify({ warning: msg }), auditId]
-          );
+          warnings.push(msg);
+          await writeProgress(pool, auditId, {
+            type: 'cloning', current: repoData.length, total: repoData.length, repoName: repo.name, warnings,
+          });
           for (const f of repo.files) {
             diffFilesAdded.push(f.relativePath);
           }
@@ -409,10 +451,8 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       // Fallback: if planning returned no files, use old heuristic (#21)
       if (filesToAnalyze.length === 0) {
         console.warn(`[Audit ${auditId.substring(0, 8)}] Planning returned 0 files, falling back to heuristic file selection`);
-        await pool.query(
-          `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
-          [JSON.stringify({ warning: 'Planning phase returned no files, using heuristic selection' }), auditId]
-        );
+        warnings.push('Planning phase returned no files, using heuristic selection');
+        await writeProgress(pool, auditId, { type: 'planning', warnings });
         filesToAnalyze = selectFiles(allFiles, level);
       }
 
@@ -425,15 +465,12 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
     );
 
     // Initialize progress detail
-    const progressDetail = filesToAnalyze.map(f => ({
+    const progressDetail: FileProgress[] = filesToAnalyze.map(f => ({
       file: f.relativePath,
       status: 'pending',
       findingsCount: 0,
     }));
-    await pool.query(
-      `UPDATE audits SET progress_detail = $1 WHERE id = $2`,
-      [JSON.stringify(progressDetail), auditId]
-    );
+    await writeProgress(pool, auditId, { type: 'analyzing', files: progressDetail, warnings });
 
     // ---- Step 3: Batch and analyze ----
     const batches = createBatches(filesToAnalyze);
@@ -546,7 +583,7 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       const filesAnalyzed = progressDetail.filter(p => p.status === 'done' || p.status === 'error').length;
       await pool.query(
         `UPDATE audits SET files_analyzed = $1, progress_detail = $2 WHERE id = $3`,
-        [filesAnalyzed, JSON.stringify(progressDetail), auditId]
+        [filesAnalyzed, JSON.stringify({ type: 'analyzing', files: progressDetail, warnings } satisfies ProgressAnalyzing), auditId]
       );
 
       // Stop immediately on first failure — don't waste money on remaining batches
@@ -613,6 +650,9 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
         );
       }
     }
+
+    // Write final progress state
+    await writeProgress(pool, auditId, { type: 'done', files: progressDetail, warnings });
 
     // ---- Step 4: Synthesis ----
     await updateStatus(pool, auditId, 'synthesizing');

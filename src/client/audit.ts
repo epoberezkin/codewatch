@@ -4,6 +4,43 @@
 // Polls audit status, shows per-file progress
 // ============================================================
 
+// ---- progress_detail discriminated union ----
+
+interface FileProgress {
+  file: string;
+  status: string;       // 'pending' | 'done' | 'error'
+  findingsCount: number;
+}
+
+interface ProgressBase {
+  warnings: string[];
+}
+
+interface ProgressCloning extends ProgressBase {
+  type: 'cloning';
+  current: number;
+  total: number;
+  repoName: string;
+}
+
+interface ProgressPlanning extends ProgressBase {
+  type: 'planning';
+}
+
+interface ProgressAnalyzing extends ProgressBase {
+  type: 'analyzing';
+  files: FileProgress[];
+}
+
+interface ProgressDone extends ProgressBase {
+  type: 'done';
+  files: FileProgress[];
+}
+
+type ProgressDetail = ProgressCloning | ProgressPlanning | ProgressAnalyzing | ProgressDone;
+
+// ---- Audit status from API ----
+
 interface AuditStatus {
   id: string;
   projectId: string;
@@ -17,11 +54,7 @@ interface AuditStatus {
   totalFiles: number;
   filesToAnalyze: number;
   filesAnalyzed: number;
-  progressDetail: Array<{
-    file: string;
-    status: string; // pending | analyzing | done | error
-    findingsCount: number;
-  }>;
+  progressDetail: ProgressDetail | null;
   commits: Array<{ repoName: string; commitSha: string; branch: string }>;
   maxSeverity: string | null;
   errorMessage: string | null;
@@ -46,13 +79,21 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const data = await apiFetch<AuditStatus>(`/api/audit/${auditId}`);
       consecutiveErrors = 0; // Reset on success
-      renderStatus(data);
 
-      if (data.status === 'completed' || data.status === 'completed_with_warnings' || data.status === 'failed') {
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-        }
+      // Terminal check FIRST — must execute even if rendering throws
+      const isTerminal = data.status === 'completed'
+        || data.status === 'completed_with_warnings'
+        || data.status === 'failed';
+
+      try {
+        renderStatus(data);
+      } catch (renderErr) {
+        console.error('Render error:', renderErr);
+      }
+
+      if (isTerminal && pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
       }
     } catch (err) {
       consecutiveErrors++;
@@ -69,6 +110,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Spec: spec/client/audit.md#renderStatus
   function renderStatus(data: AuditStatus) {
+    const detail = data.progressDetail;
+
     // Status badge
     const statusMap: Record<string, string> = {
       pending: 'badge-pending',
@@ -107,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const done = data.filesAnalyzed || 0;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
+    // Enhanced status labels using progressDetail type discrimination
     const statusLabels: Record<string, string> = {
       pending: 'Waiting to start...',
       cloning: 'Cloning repositories...',
@@ -119,21 +163,34 @@ document.addEventListener('DOMContentLoaded', () => {
       completed_with_warnings: 'Audit complete (with warnings)',
       failed: 'Audit failed',
     };
+    if (data.status === 'cloning' && detail?.type === 'cloning') {
+      statusLabels['cloning'] = `Cloning repositories (${detail.current}/${detail.total}: ${detail.repoName})...`;
+    }
     setText('progress-text', statusLabels[data.status] || data.status);
     setText('progress-count', `${done} / ${total} files`);
 
     const fill = $('progress-fill') as HTMLElement | null;
     if (fill) fill.style.width = `${pct}%`;
 
-    // File list
-    if (data.progressDetail && data.progressDetail.length > 0) {
-      renderFileList(data.progressDetail);
+    // File list — extract files via type discrimination (resilient to unknown types)
+    const files = (detail?.type === 'analyzing' || detail?.type === 'done') ? detail.files : null;
+    if (files && files.length > 0) {
+      renderFileList(files);
     }
 
     // Findings summary
-    const totalFindings = data.progressDetail?.reduce((sum, f) => sum + f.findingsCount, 0) || 0;
+    const totalFindings = files?.reduce((sum, f) => sum + (f.findingsCount || 0), 0) || 0;
     if (totalFindings > 0) {
       setText('findings-summary', `${totalFindings} finding${totalFindings !== 1 ? 's' : ''}`);
+    }
+
+    // Warnings
+    if (detail?.warnings && detail.warnings.length > 0) {
+      show('warnings-notice');
+      const warnList = $('warnings-list');
+      if (warnList) {
+        warnList.innerHTML = detail.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('');
+      }
     }
 
     // Completion card — handle both completed and completed_with_warnings
@@ -157,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Spec: spec/client/audit.md#renderFileList
-  function renderFileList(files: AuditStatus['progressDetail']) {
+  function renderFileList(files: FileProgress[]) {
     const list = $('file-list');
     if (!list) return;
 

@@ -322,7 +322,7 @@ Starts a new audit asynchronously.
 | **Validation** | `level` must be `full`, `thorough`, or `opportunistic`. `apiKey` must start with `sk-ant-`. Component IDs validated against project. |
 | **Business logic** | Resolves ownership to set `is_owner` flag on audit. If `baseAuditId` is set, marks as incremental. `runAudit` is fire-and-forget (not awaited). |
 
-### GET /api/audit/:id (L1279)
+### GET /api/audit/:id (L1301)
 
 Gets audit status and progress.
 
@@ -334,7 +334,7 @@ Gets audit status and progress.
 | **Response (404)** | Audit not found |
 | **Response (500)** | `{ error }` |
 | **DB reads** | `audits`, `projects`, `audit_commits`, `repositories` |
-| **Business logic** | `progressDetail` and `errorMessage` are only returned to privileged users (owner or requester). |
+| **Business logic** | `progressDetail` is `ProgressDetail \| null` — a discriminated union (`type: 'cloning' \| 'planning' \| 'analyzing' \| 'done'`, each variant includes `warnings: string[]`). Returned to privileged users (owner or requester); `null` for others or when no detail exists. `errorMessage` is similarly privileged-only. |
 
 ### GET /api/audit/:id/report (L1358)
 

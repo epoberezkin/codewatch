@@ -1,6 +1,6 @@
 # audit.ts -- Audit Progress Module
 
-**Source**: [`audit.ts`](../../src/client/audit.ts#L1-L199)
+**Source**: [`audit.ts`](../../src/client/audit.ts#L1-L255)
 **HTML**: `public/audit.html`
 
 ---
@@ -11,7 +11,48 @@ Polls audit status every 3 seconds and renders progress (bar, file list, status 
 
 ---
 
-## [Interface](../../src/client/audit.ts#L7-L31)
+## [Interfaces](../../src/client/audit.ts#L7-L64)
+
+### [ProgressDetail discriminated union](../../src/client/audit.ts#L9-L40)
+
+```ts
+interface FileProgress {
+  file: string;
+  status: string;       // 'pending' | 'done' | 'error'
+  findingsCount: number;
+}
+
+interface ProgressBase {
+  warnings: string[];
+}
+
+interface ProgressCloning extends ProgressBase {
+  type: 'cloning';
+  current: number;
+  total: number;
+  repoName: string;
+}
+
+interface ProgressPlanning extends ProgressBase {
+  type: 'planning';
+}
+
+interface ProgressAnalyzing extends ProgressBase {
+  type: 'analyzing';
+  files: FileProgress[];
+}
+
+interface ProgressDone extends ProgressBase {
+  type: 'done';
+  files: FileProgress[];
+}
+
+type ProgressDetail = ProgressCloning | ProgressPlanning | ProgressAnalyzing | ProgressDone;
+```
+
+All variants share a `warnings: string[]` field via `ProgressBase`. The `type` discriminant enables type-safe narrowing in rendering logic. `files` is only present on `analyzing` and `done` variants.
+
+### [AuditStatus](../../src/client/audit.ts#L44-L64)
 
 ```ts
 interface AuditStatus {
@@ -27,11 +68,7 @@ interface AuditStatus {
   totalFiles: number;
   filesToAnalyze: number;
   filesAnalyzed: number;
-  progressDetail: Array<{
-    file: string;
-    status: string;  // pending | analyzing | done | error
-    findingsCount: number;
-  }>;
+  progressDetail: ProgressDetail | null;
   commits: Array<{ repoName: string; commitSha: string; branch: string }>;
   maxSeverity: string | null;
   errorMessage: string | null;
@@ -43,7 +80,7 @@ interface AuditStatus {
 
 ---
 
-## [State Variables](../../src/client/audit.ts#L40-L42)
+## [State Variables](../../src/client/audit.ts#L73-L75)
 
 | Variable | Type | Description |
 |---|---|---|
@@ -51,41 +88,42 @@ interface AuditStatus {
 | `consecutiveErrors` | `number` | Consecutive poll failure counter |
 
 **Constants**:
-- `MAX_CONSECUTIVE_ERRORS = 5` (L42)
+- `MAX_CONSECUTIVE_ERRORS = 5` (L75)
 
 ---
 
 ## Functions
 
-### [poll](../../src/client/audit.ts#L45-L68)
+### [poll](../../src/client/audit.ts#L78-L109)
 
 | Function | Signature | Description |
 |---|---|---|
-| `poll` | `() => Promise<void>` | Fetches audit status. Resets `consecutiveErrors` on success. Calls `renderStatus`. Clears interval on terminal status (`completed`, `completed_with_warnings`, `failed`). On error, increments counter; at 5 consecutive, stops polling and shows error. |
+| `poll` | `() => Promise<void>` | Fetches audit status. Resets `consecutiveErrors` on success. Computes `isTerminal` flag BEFORE calling `renderStatus` (ensuring the flag survives render errors). Wraps `renderStatus` in try/catch to isolate render errors. Clears interval after render if terminal status (`completed`, `completed_with_warnings`, `failed`). On fetch error, increments counter; at 5 consecutive, stops polling and shows error. |
 
-### [renderStatus](../../src/client/audit.ts#L71-L157)
+### [renderStatus](../../src/client/audit.ts#L112-L214)
 
 | Function | Signature | Description |
 |---|---|---|
-| `renderStatus` | `(data: AuditStatus) => void` | Renders all UI elements from audit status data |
+| `renderStatus` | `(data: AuditStatus) => void` | Renders all UI elements from audit status data using type-discriminated `progressDetail` |
 
 Rendering logic:
-1. **Status badge** (L73-L85): Maps status to badge CSS class (`badge-pending`, `badge-running`, `badge-completed`, `badge-failed`)
-2. **Audit level** (L86): Sets audit level text
-3. **Ownership badge** (L89-L91): Shows owner badge if `isOwner`
-4. **Commit info** (L94-L99): Formats `repoName@sha7` for each commit
-5. **Incremental badge** (L101-L103): Shows "incremental" badge if applicable
-6. **Progress bar** (L106-L126): Calculates percentage, sets fill width, sets status label from status map
-7. **File list** (L129-L131): Delegates to `renderFileList`
-8. **Findings summary** (L134-L137): Shows total findings count
-9. **Completion card** (L140-L150): Shows on `completed` / `completed_with_warnings`. Sets report link, summary text with max severity.
-10. **Error notice** (L153-L156): Shows on `failed` with error message
+1. **Status badge** (L116-L128): Maps status to badge CSS class (`badge-pending`, `badge-running`, `badge-completed`, `badge-failed`)
+2. **Audit level** (L129): Sets audit level text
+3. **Ownership badge** (L132-L134): Shows owner badge if `isOwner`
+4. **Commit info** (L137-L142): Formats `repoName@sha7` for each commit
+5. **Incremental badge** (L144-L146): Shows "incremental" badge if applicable
+6. **Progress bar** (L148-L173): Calculates percentage, sets fill width, sets status label from status map. Enhanced clone progress: when `detail.type === 'cloning'`, overrides label with `Cloning repositories (current/total: repoName)...`
+7. **File list** (L175-L179): Extracts `files` via type discrimination — only when `detail.type === 'analyzing'` or `detail.type === 'done'`. Delegates to `renderFileList`.
+8. **Findings summary** (L181-L185): Shows total findings count (derived from files if available)
+9. **Warnings** (L187-L194): When `detail.warnings` has entries, shows `#warnings-notice` and populates `#warnings-list` with escaped warning items.
+10. **Completion card** (L196-L207): Shows on `completed` / `completed_with_warnings`. Sets report link, summary text with max severity. Appends warnings note for `completed_with_warnings`.
+11. **Error notice** (L209-L213): Shows on `failed` with error message
 
-### [renderFileList](../../src/client/audit.ts#L160-L178)
+### [renderFileList](../../src/client/audit.ts#L217-L235)
 
 | Function | Signature | Description |
 |---|---|---|
-| `renderFileList` | `(files: AuditStatus['progressDetail']) => void` | Renders file items with status icons into `#file-list` |
+| `renderFileList` | `(files: FileProgress[]) => void` | Renders file items with status icons into `#file-list` |
 
 **Status icons**:
 | Status | Icon |
@@ -101,7 +139,7 @@ Rendering logic:
 
 | Element | Event | Line | Description |
 |---|---|---|---|
-| `document` | `visibilitychange` | L181-L193 | Pauses polling when tab hidden (`clearInterval`). Resumes with immediate poll when visible. |
+| `document` | `visibilitychange` | L238-L250 | Pauses polling when tab hidden (`clearInterval`). Resumes with immediate poll when visible. |
 
 ---
 
@@ -109,7 +147,7 @@ Rendering logic:
 
 | Method | Endpoint | Called from | Line |
 |---|---|---|---|
-| GET | `/api/audit/{auditId}` | poll | L47 |
+| GET | `/api/audit/{auditId}` | poll | L80 |
 
 ---
 
@@ -132,6 +170,8 @@ Rendering logic:
 | `completion-summary` | Completion summary text |
 | `error-notice` | Error notice container |
 | `error-message` | Error message text |
+| `warnings-notice` | Warnings notice container (shown when `detail.warnings` has entries) |
+| `warnings-list` | `<ul>` for warning `<li>` items |
 
 ---
 
@@ -143,8 +183,9 @@ DOMContentLoaded
   -> setInterval(poll, 3000)
 
 On each poll:
-  Success -> renderStatus()
-    Terminal status? -> clearInterval
+  Success -> compute isTerminal flag
+    -> try { renderStatus() } catch { log }
+    -> if isTerminal -> clearInterval
   Error -> consecutiveErrors++
     >= 5? -> clearInterval + showError
 
@@ -158,6 +199,7 @@ Tab visible -> setInterval + immediate poll
 
 - Minimal closure state: `pollInterval` and `consecutiveErrors`.
 - All display state derived from each poll response (stateless rendering).
+- `progressDetail` is a discriminated union (`ProgressDetail | null`); rendering logic uses `detail.type` to narrow and extract type-specific fields (e.g. `files` only on `analyzing`/`done`, `repoName` only on `cloning`).
 - No auth wait -- audit page renders for any visitor.
 
 ---
@@ -172,6 +214,6 @@ No timer showing how long the audit has been running (despite having `createdAt`
 
 ## [GAP] Polling Resumes Without Error Count Reset
 
-When the tab becomes visible again (L187-L192), `consecutiveErrors` is not reset. If there were prior errors, the counter carries over, potentially triggering the 5-error stop prematurely.
+When the tab becomes visible again (L244-L249), `consecutiveErrors` is not reset. If there were prior errors, the counter carries over, potentially triggering the 5-error stop prematurely.
 
 ## [REC] Reset `consecutiveErrors = 0` when resuming polling on visibility change. Consider showing elapsed time from `startedAt`.

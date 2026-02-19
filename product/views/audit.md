@@ -41,7 +41,7 @@ Shows overall audit progress:
 
 - **Status text** (`progress-text`): Human-readable phase label that changes through the audit lifecycle:
   - `pending` -- "Waiting to start..."
-  - `cloning` -- "Cloning repositories..."
+  - `cloning` -- "Cloning repositories..." (enhanced to "Cloning repositories (1/5: repo-name)..." when `progressDetail` provides clone progress)
   - `classifying` -- "Classifying software..."
   - `planning` -- "Planning analysis..."
   - `estimating` -- "Estimating scope..."
@@ -55,7 +55,7 @@ Shows overall audit progress:
 
 ### File List
 
-Card containing a `<ul>` of files from `progressDetail` array. Each file item shows:
+Card containing a `<ul>` of files extracted from `progressDetail` via type discrimination. Files are only rendered when `progressDetail.type` is `analyzing` or `done`; unknown or missing types are silently ignored (no crash). Each file item shows:
 
 | Status | Icon | CSS class |
 |---|---|---|
@@ -66,7 +66,17 @@ Card containing a `<ul>` of files from `progressDetail` array. Each file item sh
 
 Each item: `[status icon] [filename] [N finding(s)]` -- finding count shown only if > 0.
 
-The card header also shows a total **findings summary** (`findings-summary`): e.g., "12 findings".
+The card header also shows a total **findings summary** (`findings-summary`): e.g., "12 findings". Falls back to 0 if file data is unavailable or in an unknown format.
+
+### Warnings Section
+
+Hidden until `progressDetail.warnings` contains one or more entries. Displayed between the file list and the completion card.
+
+- **Container:** `warnings-notice` (hidden by default)
+- **Content:** `<ul>` with id `warnings-list`, each `<li>` is an escaped warning string from `progressDetail.warnings`
+- **Example warnings:** "diff failed for repo, auditing all files", "Planning phase returned no files"
+
+Warnings accumulate across phases -- each `progressDetail` variant carries a `warnings: string[]` field.
 
 ### Completion Card
 
@@ -88,7 +98,7 @@ Hidden until `status === 'failed'` and `errorMessage` is present. Shows:
 
 - **Interval:** 3 seconds (`setInterval(poll, 3000)`)
 - **API endpoint:** `GET /api/audit/{auditId}` (returns `AuditStatus` object)
-- **Stops polling** when status is `completed`, `completed_with_warnings`, or `failed`
+- **Stops polling** when status is `completed`, `completed_with_warnings`, or `failed`. Terminal status is checked **before** rendering, so polling stops correctly even if rendering throws an error.
 - **Visibility-aware** (Issue #26): When tab becomes hidden (`document.hidden`), polling interval is cleared. When tab becomes visible again, polling resumes immediately (one instant poll + restart interval).
 - **Error resilience:** Tracks `consecutiveErrors`. After 5 consecutive poll failures, stops polling and shows error: "Lost connection to audit status after 5 consecutive errors. Please refresh the page." Counter resets on any successful poll.
 
@@ -110,17 +120,49 @@ interface AuditStatus {
   totalFiles: number;
   filesToAnalyze: number;
   filesAnalyzed: number;
-  progressDetail: Array<{
-    file: string;
-    status: string;            // pending | analyzing | done | error
-    findingsCount: number;
-  }>;
+  progressDetail: ProgressDetail | null;  // discriminated union, see below
   commits: Array<{ repoName: string; commitSha: string; branch: string }>;
   maxSeverity: string | null;
   errorMessage: string | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+// ProgressDetail is a discriminated union on the `type` field.
+// All variants carry a `warnings: string[]` field.
+
+interface ProgressBase {
+  warnings: string[];
+}
+
+interface ProgressCloning extends ProgressBase {
+  type: 'cloning';
+  current: number;       // 1-based index of repo being cloned
+  total: number;         // total repos to clone
+  repoName: string;      // name of repo currently being cloned
+}
+
+interface ProgressPlanning extends ProgressBase {
+  type: 'planning';
+}
+
+interface ProgressAnalyzing extends ProgressBase {
+  type: 'analyzing';
+  files: FileProgress[];
+}
+
+interface ProgressDone extends ProgressBase {
+  type: 'done';
+  files: FileProgress[];
+}
+
+type ProgressDetail = ProgressCloning | ProgressPlanning | ProgressAnalyzing | ProgressDone;
+
+interface FileProgress {
+  file: string;
+  status: string;            // pending | analyzing | done | error
+  findingsCount: number;
 }
 ```
 

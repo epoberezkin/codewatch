@@ -1359,7 +1359,7 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
       totalFiles: audit.total_files,
       filesToAnalyze: audit.files_to_analyze,
       filesAnalyzed: audit.files_analyzed,
-      progressDetail: isPrivileged ? (audit.progress_detail || []) : [],
+      progressDetail: isPrivileged ? (audit.progress_detail || null) : null,
       maxSeverity: audit.max_severity,
       errorMessage: isPrivileged ? audit.error_message : null,
       createdAt: audit.created_at,

@@ -10,7 +10,7 @@ import { BUDGET_PERCENTAGES } from './tokens';
 // ---------- Constants ----------
 
 const PLANNING_MODEL = 'claude-opus-4-5-20251101';
-const TARGET_FILES_PER_BATCH = 250;
+const TARGET_FILES_PER_BATCH = 100;
 const MIN_BATCH_SIZE = 25;
 
 // ---------- Types ----------

@@ -52,7 +52,7 @@ Value: `'claude-opus-4-5-20251101'`
 
 ### `TARGET_FILES_PER_BATCH` (internal)
 
-Value: `250`. Files per batch in `runBatchedPlanningCalls()`. Each ranked file entry ≈ 60 output tokens; 250 × 60 = 15,000 tokens, well under 32,000 (50% of the 64K max output).
+Value: `100`. Files per batch in `runBatchedPlanningCalls()`. Each ranked file entry ≈ 60 output tokens; 100 × 60 = 6,000 tokens, well under 10,000 (50% of the 20K max output).
 
 ### `MIN_BATCH_SIZE` (internal)
 
@@ -124,7 +124,7 @@ async function runPlanningCall(
 3. Builds a `profilesText` string from `componentProfiles`: for each component, renders name, role, security summary, sensitive areas, and threat surface. Falls back to `(no component profiles available)` if empty.
 4. Builds `allFilesText`: all scanned files with token counts.
 5. Renders the prompt template via `renderPrompt()` with variables: `category`, `description`, `threat_model`, `component_profiles`, `grep_results` (grep text + full file list appended under `### All files:`), and `audit_level`.
-6. Calls `callClaude()` with system prompt `'You are a security audit planner. Return valid JSON only.'`, the rendered user prompt, and model `PLANNING_MODEL`. Uses the global default `maxTokens` (64000).
+6. Calls `callClaude()` with system prompt `'You are a security audit planner. Return valid JSON only.'`, the rendered user prompt, and model `PLANNING_MODEL`. Uses the global default `maxTokens` (20000).
 7. Parses the Claude response as `RankedFile[]` via `parseJsonResponse<RankedFile[]>()`.
 8. Returns `{ rankedFiles, inputTokens, outputTokens }`.
 

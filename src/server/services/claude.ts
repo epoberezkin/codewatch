@@ -47,7 +47,7 @@ export async function callClaude(
   systemPrompt: string,
   userMessage: string,
   model: string = 'claude-opus-4-5-20251101',
-  maxTokens: number = 64000,
+  maxTokens: number = 20000,
 ): Promise<ClaudeResponse> {
   // Disable SDK-level retries; we handle retries ourselves to support long Retry-After waits
   const client = new Anthropic({ apiKey, maxRetries: 0 });

@@ -29,7 +29,7 @@ export interface ClaudeResponse {
 |------|-------|------|
 | `MAX_RETRIES` | `5` | 15 |
 | Default model | `claude-opus-4-5-20251101` | 49, 113 |
-| Default `maxTokens` | `64000` | 50 |
+| Default `maxTokens` | `20000` | 50 |
 | Default Retry-After fallback | `60` seconds | 34 |
 | Rate-limit buffer | `+5` seconds added to Retry-After | 86, 135 |
 | Server-error backoff | `min(10 * 2^attempt, 120)` seconds | 89, 136 |
@@ -54,7 +54,7 @@ export async function callClaude(
   systemPrompt: string,
   userMessage: string,
   model?: string,       // default 'claude-opus-4-5-20251101'
-  maxTokens?: number,   // default 64000
+  maxTokens?: number,   // default 20000
 ): Promise<ClaudeResponse>
 ```
 

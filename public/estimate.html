@@ -74,16 +74,6 @@
             </div>
         </div>
 
-        <!-- API Key -->
-        <div class="card mb-2" id="api-key-section">
-            <h3 class="mb-2">Anthropic API Key</h3>
-            <div class="form-group">
-                <input type="password" id="api-key" placeholder="sk-ant-...">
-                <p class="text-sm text-muted mt-1">Used for component analysis and audits. Never stored.</p>
-                <p class="text-sm hidden mt-1" id="api-key-error" style="color: var(--error);">API key should start with sk-ant-</p>
-            </div>
-        </div>
-
         <!-- Component Analysis -->
         <div class="card mb-2" id="analyze-section">
             <h3 class="mb-2">Component Analysis</h3>
@@ -127,6 +117,16 @@
             </div>
         </div>
 
+        <!-- API Key -->
+        <div class="card mb-2" id="api-key-section">
+            <h3 class="mb-2">Anthropic API Key</h3>
+            <div class="form-group">
+                <input type="password" id="api-key" placeholder="sk-ant-...">
+                <p class="text-sm text-muted mt-1">Used for component analysis and audits. Never stored.</p>
+                <p class="text-sm hidden mt-1" id="api-key-error" style="color: var(--error);">API key should start with sk-ant-</p>
+            </div>
+        </div>
+
         <!-- Audit Level Cards (disabled until component analysis complete) -->
         <h3 class="mb-1">Audit Levels</h3>
         <div class="estimate-grid" id="estimate-grid">
@@ -156,13 +156,9 @@
         <div class="hidden" id="step-3">
             <!-- Access tier preview -->
             <div class="notice notice-info hidden" id="access-tier-preview"></div>
-            <!-- Non-owner notice -->
-            <div class="notice notice-warn hidden" id="non-owner-notice">
-                <strong>Non-owner notice:</strong> Findings rated Medium or above will be shown as severity counts only. Full details for serious findings are available after a time-gate (3 months for medium/high, 6 months for critical) or when the project owner publishes the report. By running this audit, you are sponsoring the project's security.
-            </div>
             <div class="card mt-2">
                 <button class="btn btn-primary btn-block" id="start-audit-btn" disabled>
-                    Select an audit level above
+                    Enter your API key above
                 </button>
             </div>
         </div>

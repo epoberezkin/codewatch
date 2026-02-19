@@ -114,7 +114,7 @@ Each card shows estimated cost in USD via `formatUSD()` with `<small>estimated</
 
 ### 6. API Key Section
 
-**Container:** `#api-key-section` card.
+**Container:** `#api-key-section` card. Positioned below Component Selection (step 2) to keep it near the Start Audit button.
 
 | Element | Detail |
 |---|---|
@@ -187,7 +187,7 @@ Each card shows estimated cost in USD via `formatUSD()` with `<small>estimated</
 
 ### 9. Access Tier Preview (Step 3)
 
-**Container:** `#access-tier-preview` and `#non-owner-notice` (both hidden by default, inside `#step-3`).
+**Container:** `#access-tier-preview` (hidden by default, inside `#step-3`).
 
 Shown after project data loads. Logic:
 
@@ -195,7 +195,7 @@ Shown after project data loads. Logic:
 |---|---|
 | `ownership.isOwner` | `notice-info`: "**Full access** -- you'll see complete findings as the project owner." |
 | `ownership.needsReauth` | `notice-info`: "**Ownership unverified** -- re-authenticate with GitHub to verify org ownership and get full access." (with link) |
-| User logged in but not owner | `notice-warn` (`#non-owner-notice`): Explains redaction policy -- medium+ findings are redacted (severity, CWE, repo, and status visible; all other fields null), time-gated (3mo medium/high, 6mo critical). Also shows `notice-info`: "**Redacted access** -- medium and above findings will be partially redacted." |
+| User logged in but not owner | `notice-info`: "**Redacted access** -- medium+ findings shown as severity counts only. Full details after responsible disclosure period (3mo medium/high, 6mo critical) or when owner publishes. The project owner will be able to access all findings." |
 | User not logged in | Nothing shown |
 
 [GAP] Access tier preview is rendered on page load but placed inside `#step-3` which is hidden until a level is selected. The ownership badge in the header is the only early indicator. Users may not see the access tier warning until they've already invested time in component analysis.
@@ -216,7 +216,6 @@ Shown after project data loads. Logic:
 | State | Label |
 |---|---|
 | No components selected | "Select at least one component above" |
-| No level selected | "Select an audit level above" |
 | No API key | "Enter your API key above" |
 | Invalid key format | "Invalid key format (should start with sk-ant-)" |
 | Ready | "Start [incremental] <level> audit [(<N> components)] (~$X.XX)" |

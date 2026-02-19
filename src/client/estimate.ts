@@ -123,9 +123,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         '<strong>Ownership unverified</strong> — <a href="/auth/github">re-authenticate with GitHub</a> to verify org ownership and get full access.');
       show('access-tier-preview');
     } else if (user) {
-      show('non-owner-notice');
       setHtml('access-tier-preview',
-        '<strong>Redacted access</strong> — medium and above findings will show severity counts only. Full details available after responsible disclosure period.');
+        '<strong>Redacted access</strong> — medium and above findings will be shown as severity counts only. ' +
+        'Full details become available after a responsible disclosure period (3 months for medium/high, 6 months for critical) ' +
+        'or when the owner publishes the report. The project owner will be able to access all findings.');
       show('access-tier-preview');
     }
 
@@ -526,8 +527,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     btn.disabled = !validKey || !hasLevel || !hasComponents;
     if (!hasComponents) {
       btn.textContent = 'Select at least one component above';
-    } else if (!hasLevel) {
-      btn.textContent = 'Select an audit level above';
     } else if (!hasKey) {
       btn.textContent = 'Enter your API key above';
     } else if (!validKey) {

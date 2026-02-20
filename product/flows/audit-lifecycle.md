@@ -144,7 +144,7 @@ Fallback: If planning returns zero files, fall back to heuristic selection (sort
 
 **Status**: `analyzing`
 
-1. **Batching**: Group selected files into batches of up to 150,000 tokens each, sorted by directory path to keep related code together.
+1. **Batching**: Group selected files into batches of up to 100,000 rough tokens each, sorted by directory path to keep related code together. Before each batch is sent to Claude, the exact token count is verified via the free `countTokens` API. If the exact count exceeds 195,000 tokens (API limit minus margin), the batch is automatically split in half and re-queued.
 2. **Per-batch analysis**: For each batch:
    - Build a user message with full file contents.
    - For incremental audits: include context about previous findings for modified files.
@@ -270,7 +270,7 @@ sequenceDiagram
     end
 
     Server->>PostgreSQL: UPDATE status = 'analyzing'
-    loop Each batch (up to 150K tokens)
+    loop Each batch (up to 100K rough tokens, verified via countTokens)
         Server->>Filesystem: Read file contents
         Server->>Claude: Analyze batch
         Claude-->>Server: AnalysisResult (findings)

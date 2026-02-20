@@ -56,7 +56,7 @@ Value: `100`. Files per batch in `runBatchedPlanningCalls()`. Each ranked file e
 
 ### `MIN_BATCH_SIZE` (internal)
 
-Value: `25`. Floor for recursive halving in `runPlanningCallWithRetry()`. Bounds recursion to ~3 levels (log₂(250/25) ≈ 3.3).
+Value: `25`. Floor for recursive halving in `runPlanningCallWithRetry()`. Bounds recursion to 2 levels (log₂(100/25) = 2).
 
 ### `SECURITY_GREP_PATTERNS` (exported)
 
@@ -207,7 +207,7 @@ async function runPlanningPhase(
 **Steps:**
 
 1. **Step 1 -- Local greps:** Calls `runSecurityGreps(files, repoData)` to get `GrepHit[]`.
-2. **Step 2 -- Claude ranking:** Serializes the threat model parties into a human-readable string (or `(no threat model)` if absent). Calls `runBatchedPlanningCalls()` which splits large file lists into batches of ~250, with recursive retry on parse failure.
+2. **Step 2 -- Claude ranking:** Serializes the threat model parties into a human-readable string (or `(no threat model)` if absent). Calls `runBatchedPlanningCalls()` which splits large file lists into batches of ~100, with recursive retry on parse failure.
 3. **Step 3 -- Budget selection:** Calls `selectFilesByBudget()` with the ranked files, all scanned files, and the audit level.
 4. **Step 4 -- DB update:** Persists the plan to the database (see Database Operations below).
 5. **Step 5 -- Cost calculation:** Computes `planningCostUsd` from actual token usage (see Cost Calculation below).

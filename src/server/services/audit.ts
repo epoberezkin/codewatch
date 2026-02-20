@@ -1,7 +1,7 @@
 // Spec: spec/services/audit.md
 import { Pool } from 'pg';
 import * as crypto from 'crypto';
-import { callClaude, parseJsonResponse } from './claude';
+import { callClaude, countTokens, parseJsonResponse } from './claude';
 import { cloneOrUpdate, scanCodeFiles, readFileContent, getDefaultBranchName, diffBetweenCommits } from './git';
 import type { ScannedFile } from './git';
 import { roughTokenCount, SECURITY_CRITICAL_PATTERNS, BUDGET_PERCENTAGES } from './tokens';
@@ -98,7 +98,8 @@ function writeProgress(pool: Pool, auditId: string, detail: ProgressDetail): Pro
   ).then(() => {});
 }
 
-const MAX_BATCH_TOKENS = 150000;
+const MAX_BATCH_TOKENS = 100000;
+const MAX_INPUT_TOKENS = 195000; // API limit is 200K; leave 5K margin
 
 // ---------- Main Orchestrator ----------
 
@@ -515,6 +516,26 @@ export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
       }
 
       const userMessage = `Analyze the following source code files:\n\n${fileContents}${previousFindingsContext}`;
+
+      // Verify exact token count via free API; split batch if over limit
+      const exactTokens = await countTokens(apiKey, systemPrompt, userMessage);
+      if (exactTokens > MAX_INPUT_TOKENS && batch.files.length > 1) {
+        const mid = Math.ceil(batch.files.length / 2);
+        const firstHalf = batch.files.slice(0, mid);
+        const secondHalf = batch.files.slice(mid);
+        const firstTokens = firstHalf.reduce((s, f) => s + f.roughTokens, 0);
+        const secondTokens = secondHalf.reduce((s, f) => s + f.roughTokens, 0);
+        console.log(
+          `[Audit ${auditId.substring(0, 8)}] Batch ${i + 1} too large (${exactTokens} tokens), ` +
+          `splitting ${batch.files.length} files into ${firstHalf.length}+${secondHalf.length}`
+        );
+        batches.splice(i, 1,
+          { files: firstHalf, totalTokens: firstTokens },
+          { files: secondHalf, totalTokens: secondTokens },
+        );
+        i--; // re-process from the same index
+        continue;
+      }
 
       try {
         const response = await callClaude(apiKey, systemPrompt, userMessage);

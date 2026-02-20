@@ -128,19 +128,20 @@ Discriminated union for the `audits.progress_detail` column. Every progress writ
 
 | Name | Value | Line |
 |------|-------|------|
-| `MAX_BATCH_TOKENS` | `150000` | 101 |
+| `MAX_BATCH_TOKENS` | `100000` | 101 |
+| `MAX_INPUT_TOKENS` | `195000` | 102 |
 
 ---
 
-## Main Function: `runAudit()` (lines 106-729)
+## Main Function: `runAudit()` (lines 107-749)
 
 ```ts
 export async function runAudit(pool: Pool, options: AuditOptions): Promise<void>
 ```
 
-The sole export. Drives the entire audit through five sequential steps. All database state transitions and Claude API calls happen here. On any unhandled error, sets `audits.status = 'failed'` with the error message (lines 722-728).
+The sole export. Drives the entire audit through five sequential steps. All database state transitions and Claude API calls happen here. On any unhandled error, sets `audits.status = 'failed'` with the error message (lines 743-748).
 
-A running `actualCostUsd` accumulator (line 108) tracks estimated spend across all Claude calls. A `warnings: string[]` array (line 109) accumulates non-fatal warning messages (e.g., diff failures, planning fallbacks) and is included in every `progress_detail` write via the `ProgressBase.warnings` field.
+A running `actualCostUsd` accumulator (line 109) tracks estimated spend across all Claude calls. A `warnings: string[]` array (line 110) accumulates non-fatal warning messages (e.g., diff failures, planning fallbacks) and is included in every `progress_detail` write via the `ProgressBase.warnings` field.
 
 ---
 
@@ -152,35 +153,35 @@ A running `actualCostUsd` accumulator (line 108) tracks estimated spend across a
 
 | Query | Table(s) | Purpose |
 |-------|----------|---------|
-| `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, pr.branch FROM repositories r JOIN project_repos pr ...` (lines 115-121) | `repositories`, `project_repos` | Fetch all repos linked to the project |
-| `SELECT ac.commit_sha, r.repo_name, r.repo_url FROM audit_commits ac JOIN repositories r ... WHERE ac.audit_id = $baseAuditId` (lines 137-143) | `audit_commits`, `repositories` | (Incremental only) Get base audit commit SHAs to compute `shallowSince` dates |
+| `SELECT r.id, r.repo_url, r.repo_name, r.repo_path, pr.branch FROM repositories r JOIN project_repos pr ...` (lines 116-122) | `repositories`, `project_repos` | Fetch all repos linked to the project |
+| `SELECT ac.commit_sha, r.repo_name, r.repo_url FROM audit_commits ac JOIN repositories r ... WHERE ac.audit_id = $baseAuditId` (lines 138-144) | `audit_commits`, `repositories` | (Incremental only) Get base audit commit SHAs to compute `shallowSince` dates |
 
 **External calls:**
 
 | Call | Module | Purpose |
 |------|--------|---------|
-| `getCommitDate(owner, repoName, commitSha)` (line 150) | `github.ts` | Get commit timestamp for shallow-clone optimization |
-| `cloneOrUpdate(repoUrl, branch, shallowSince)` (line 172) | `git.ts` | Clone or update local repo checkout |
-| `getDefaultBranchName(localPath)` (line 173) | `git.ts` | Resolve actual default branch name |
-| `scanCodeFiles(localPath)` (line 183) | `git.ts` | List all code files with rough token counts |
+| `getCommitDate(owner, repoName, commitSha)` (line 151) | `github.ts` | Get commit timestamp for shallow-clone optimization |
+| `cloneOrUpdate(repoUrl, branch, shallowSince)` (line 173) | `git.ts` | Clone or update local repo checkout |
+| `getDefaultBranchName(localPath)` (line 174) | `git.ts` | Resolve actual default branch name |
+| `scanCodeFiles(localPath)` (line 184) | `git.ts` | List all code files with rough token counts |
 
 **Database writes:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressCloning` (lines 166-168) | `audits` | Clone progress tracking |
-| `INSERT INTO audit_commits ... ON CONFLICT DO UPDATE` (lines 176-181) | `audit_commits` | Record HEAD SHA per repo for this audit |
-| `UPDATE audits SET total_files, total_tokens, started_at` (lines 226-229) | `audits` | Audit-level file/token stats |
+| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressCloning` (lines 167-169) | `audits` | Clone progress tracking |
+| `INSERT INTO audit_commits ... ON CONFLICT DO UPDATE` (lines 177-181) | `audit_commits` | Record HEAD SHA per repo for this audit |
+| `UPDATE audits SET total_files, total_tokens, started_at` (lines 227-229) | `audits` | Audit-level file/token stats |
 
 **Logic:**
 
 1. For each repo, clones/updates locally, records HEAD commit SHA.
-2. File paths are namespaced as `{repoName}/{relativePath}` (line 185).
+2. File paths are namespaced as `{repoName}/{relativePath}` (line 186).
 3. If `options.componentIds` is set, files are filtered using `minimatch` against component `file_patterns` (lines 202-223). Patterns are prefixed with the repo name for namespaced matching.
 
 ---
 
-### Step 2b: Incremental Diff & Finding Inheritance (lines 231-363)
+### Step 2b: Incremental Diff & Finding Inheritance (lines 232-364)
 
 Runs only when `options.baseAuditId` is set. Executes between Step 0 and Step 1 in the code flow (before classification).
 
@@ -188,147 +189,149 @@ Runs only when `options.baseAuditId` is set. Executes between Step 0 and Step 1 
 
 | Query | Table(s) | Purpose |
 |-------|----------|---------|
-| `SELECT ac.repo_id, ac.commit_sha, r.repo_name FROM audit_commits ac JOIN repositories r ... WHERE ac.audit_id = $baseAuditId` (lines 237-243) | `audit_commits`, `repositories` | Get base commit SHAs per repo |
-| `SELECT * FROM audit_findings WHERE audit_id = $baseAuditId AND status = 'open'` (lines 307-309) | `audit_findings` | All open findings from the base audit for inheritance |
+| `SELECT ac.repo_id, ac.commit_sha, r.repo_name FROM audit_commits ac JOIN repositories r ... WHERE ac.audit_id = $baseAuditId` (lines 238-244) | `audit_commits`, `repositories` | Get base commit SHAs per repo |
+| `SELECT * FROM audit_findings WHERE audit_id = $baseAuditId AND status = 'open'` (lines 308-310) | `audit_findings` | All open findings from the base audit for inheritance |
 
 **External calls:**
 
 | Call | Module | Purpose |
 |------|--------|---------|
-| `diffBetweenCommits(localPath, baseSha, headSha)` (line 267) | `git.ts` | Compute file-level diff (added/modified/deleted/renamed) |
+| `diffBetweenCommits(localPath, baseSha, headSha)` (line 268) | `git.ts` | Compute file-level diff (added/modified/deleted/renamed) |
 
 **Database writes:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressCloning` (lines 273-275) | `audits` | Warning when diff fails due to shallow clone (warning pushed to `warnings` array) |
-| `UPDATE audits SET diff_files_added, diff_files_modified, diff_files_deleted` (lines 297-300) | `audits` | Diff statistics |
-| `INSERT INTO audit_findings (... status)` (lines 337-350) | `audit_findings` | Inherit each open finding from base audit into this audit |
-| `UPDATE audit_findings SET resolved_in_audit_id` (lines 356-361) | `audit_findings` | Mark base findings in deleted files as resolved |
+| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressCloning` (lines 274-276) | `audits` | Warning when diff fails due to shallow clone (warning pushed to `warnings` array) |
+| `UPDATE audits SET diff_files_added, diff_files_modified, diff_files_deleted` (lines 298-301) | `audits` | Diff statistics |
+| `INSERT INTO audit_findings (... status)` (lines 338-351) | `audit_findings` | Inherit each open finding from base audit into this audit |
+| `UPDATE audit_findings SET resolved_in_audit_id` (lines 357-362) | `audit_findings` | Mark base findings in deleted files as resolved |
 
 **Logic:**
 
 1. For each repo, computes diff between base audit commit and current HEAD.
 2. If a repo was not in the base audit, all its files are treated as added.
 3. If `diffBetweenCommits` fails (e.g., shallow clone missing base SHA), all files in that repo are treated as added, a warning is pushed to `warnings`, and a `ProgressCloning` update is written.
-4. `filesToAnalyzeOverride` is set to only added + modified + renamed-to files (lines 303-304).
+4. `filesToAnalyzeOverride` is set to only added + modified + renamed-to files (lines 304-305).
 5. Open findings from the base audit are inherited into the new audit:
    - Findings for deleted files get `status = 'fixed'` (line 327).
-   - Findings for renamed files get their `file_path` updated to the new path (line 332).
+   - Findings for renamed files get their `file_path` updated to the new path (line 333).
    - Duplicate fingerprints are skipped to prevent double-insertion (lines 314-320).
-6. Base findings on deleted files are also marked with `resolved_in_audit_id` pointing to this audit (lines 355-362).
+6. Base findings on deleted files are also marked with `resolved_in_audit_id` pointing to this audit (lines 356-363).
 
 ---
 
-### Step 1: Classification (lines 365-407)
+### Step 1: Classification (lines 366-408)
 
 **Status:** `classifying` (only when running classification)
 
-**Condition:** Runs the Claude classification call only when `projects.category` is null (first audit). Otherwise, loads the existing classification from the database (lines 382-407).
+**Condition:** Runs the Claude classification call only when `projects.category` is null (first audit). Otherwise, loads the existing classification from the database (lines 383-408).
 
 **Database reads:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `SELECT category FROM projects WHERE id = $1` (lines 366-369) | `projects` | Check if already classified |
-| `SELECT category, description, involved_parties, threat_model FROM projects WHERE id = $1` (lines 384-387) | `projects` | Load existing classification when present |
+| `SELECT category FROM projects WHERE id = $1` (lines 367-370) | `projects` | Check if already classified |
+| `SELECT category, description, involved_parties, threat_model FROM projects WHERE id = $1` (lines 385-388) | `projects` | Load existing classification when present |
 
 **External calls (first audit only):**
 
 | Call | Module | Purpose |
 |------|--------|---------|
-| `classifyProject(pool, projectId, auditId, apiKey, repoData)` (line 379) | local | Claude API call for classification (see helper below) |
+| `classifyProject(pool, projectId, auditId, apiKey, repoData)` (line 380) | local | Claude API call for classification (see helper below) |
 
-**Cost:** Hardcoded `$0.05` estimate for classification (line 381).
+**Cost:** Hardcoded `$0.05` estimate for classification (line 382).
 
 **Logic:**
 
-- When loading an existing classification (lines 382-407), the threat model is parsed from JSON with a fallback to wrapping raw strings in `{ generated: ... }`.
+- When loading an existing classification (lines 383-408), the threat model is parsed from JSON with a fallback to wrapping raw strings in `{ generated: ... }`.
 - The reconstructed `ClassificationResult` has empty `components` and `threat_model_files` since those are not stored in the `projects` table. [GAP] `components` array is always empty when loading from DB -- only populated on first audit.
 
 ---
 
-### Step 2: Planning Phase (lines 409-465)
+### Step 2: Planning Phase (lines 410-466)
 
 **Status:** `planning` (fresh audits only), then `analyzing`
 
-**Condition:** Runs only for fresh audits (`filesToAnalyzeOverride` is null). Incremental audits skip planning and go straight to `analyzing` (lines 412-415).
+**Condition:** Runs only for fresh audits (`filesToAnalyzeOverride` is null). Incremental audits skip planning and go straight to `analyzing` (lines 413-416).
 
 **Database reads:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `SELECT name, role, security_profile FROM components WHERE project_id = $1` (lines 422-425) | `components` | Load component profiles for planning context |
+| `SELECT name, role, security_profile FROM components WHERE project_id = $1` (lines 423-426) | `components` | Load component profiles for planning context |
 
 **External calls:**
 
 | Call | Module | Purpose |
 |------|--------|---------|
-| `runPlanningPhase(pool, auditId, apiKey, allFiles, repos, level, classification, componentProfiles)` (lines 432-442) | `planning.ts` | AI-driven file selection; returns `{ plan, planningCostUsd }` |
-| `selectFiles(allFiles, level)` (line 456) | local | Fallback heuristic file selection if planning returns 0 files |
+| `runPlanningPhase(pool, auditId, apiKey, allFiles, repos, level, classification, componentProfiles)` (lines 433-443) | `planning.ts` | AI-driven file selection; returns `{ plan, planningCostUsd }` |
+| `selectFiles(allFiles, level)` (line 457) | local | Fallback heuristic file selection if planning returns 0 files |
 
 **Database writes:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressPlanning` (line 455) | `audits` | Warning when falling back to heuristic selection (warning pushed to `warnings` array) |
-| `UPDATE audits SET files_to_analyze, tokens_to_analyze` (lines 462-465) | `audits` | Final analysis scope |
-| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressAnalyzing` (line 473) | `audits` | Per-file progress tracker (all files start as `pending`) |
+| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressPlanning` (line 456) | `audits` | Warning when falling back to heuristic selection (warning pushed to `warnings` array) |
+| `UPDATE audits SET files_to_analyze, tokens_to_analyze` (lines 463-466) | `audits` | Final analysis scope |
+| [`writeProgress()`](#writeprogress-lines-94-99) `ProgressAnalyzing` (line 474) | `audits` | Per-file progress tracker (all files start as `pending`) |
 
 **Logic:**
 
 1. Calls `runPlanningPhase` which uses Claude to select security-relevant files.
-2. Maps the plan output back to `ScannedFile` objects (line 449).
-3. If the plan returns 0 files, falls back to `selectFiles()` heuristic (line 456) -- scored by `SECURITY_CRITICAL_PATTERNS` regex matching, budget-capped by `BUDGET_PERCENTAGES[level]`.
+2. Maps the plan output back to `ScannedFile` objects (line 450).
+3. If the plan returns 0 files, falls back to `selectFiles()` heuristic (line 457) -- scored by `SECURITY_CRITICAL_PATTERNS` regex matching, budget-capped by `BUDGET_PERCENTAGES[level]`.
 
 ---
 
-### Step 3: Batch & Analyze (lines 475-607)
+### Step 3: Batch & Analyze (lines 476-628)
 
 **Status:** `analyzing` (set in Step 2)
 
-**Batching:** Files are split into batches of up to `MAX_BATCH_TOKENS` (150,000) tokens each via `createBatches()`.
+**Batching:** Files are initially split into batches of up to `MAX_BATCH_TOKENS` (100,000) rough tokens via `createBatches()`. Before each batch is sent to Claude, the exact token count is verified via the free `countTokens()` API. If the exact count exceeds `MAX_INPUT_TOKENS` (195,000) and the batch has more than one file, the batch is split in half and re-queued (lines 521-537).
 
-**Per-batch processing (lines 483-591):**
+**Per-batch processing (lines 484-612):**
 
 For each batch:
 
-1. **Build user message** (lines 491-517): Reads file contents from disk, concatenates with `---` separators. For incremental audits, appends context about previous findings for these files from the base audit.
+1. **Build user message** (lines 492-518): Reads file contents from disk, concatenates with `---` separators. For incremental audits, appends context about previous findings for these files from the base audit.
 
-2. **Claude API call** (line 520): `callClaude(apiKey, systemPrompt, userMessage)` -- system prompt is built from classification + level template via `buildSystemPrompt()`.
+2. **Verify token count** (lines 521-537): Calls `countTokens(apiKey, systemPrompt, userMessage)` to get the exact input token count. If it exceeds `MAX_INPUT_TOKENS` and the batch has >1 file, splits the batch in half via `batches.splice()` and re-processes from the same index.
 
-3. **Parse response** (line 527): `parseJsonResponse<AnalysisResult>(response.content)`.
+3. **Claude API call** (line 541): `callClaude(apiKey, systemPrompt, userMessage)` -- system prompt is built from classification + level template via `buildSystemPrompt()`.
 
-4. **Insert findings** (lines 530-559): For each finding:
+4. **Parse response** (line 548): `parseJsonResponse<AnalysisResult>(response.content)`.
+
+5. **Insert findings** (lines 550-580): For each finding:
    - Generates a fingerprint via `generateFingerprint()`.
-   - For incremental audits: checks if a finding with the same fingerprint already exists in this audit (inherited from base). Skips if duplicate (lines 537-541).
+   - For incremental audits: checks if a finding with the same fingerprint already exists in this audit (inherited from base). Skips if duplicate (lines 557-561).
    - Inserts into `audit_findings` with all fields.
 
-5. **Update progress** (lines 562-587): Marks batch files as `done` or `error` in the progress detail JSON. Writes updated `files_analyzed` and `progress_detail` (as `ProgressAnalyzing` with `satisfies` type assertion) to `audits`.
+6. **Update progress** (lines 582-608): Marks batch files as `done` or `error` in the progress detail JSON. Writes updated `files_analyzed` and `progress_detail` (as `ProgressAnalyzing` with `satisfies` type assertion) to `audits`.
 
 **Database reads (per batch, incremental only):**
 
 | Query | Table | Purpose |
 |-------|----------|---------|
-| `SELECT file_path, title, severity, description FROM audit_findings WHERE audit_id = $baseAuditId AND file_path = ANY(...)` (lines 504-509) | `audit_findings` | Previous findings context for modified files |
-| `SELECT id FROM audit_findings WHERE audit_id = $auditId AND fingerprint = $fp` (lines 537-540) | `audit_findings` | Dedup check against inherited findings |
+| `SELECT file_path, title, severity, description FROM audit_findings WHERE audit_id = $baseAuditId AND file_path = ANY(...)` (lines 505-510) | `audit_findings` | Previous findings context for modified files |
+| `SELECT id FROM audit_findings WHERE audit_id = $auditId AND fingerprint = $fp` (lines 558-561) | `audit_findings` | Dedup check against inherited findings |
 
 **Database writes (per batch):**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `INSERT INTO audit_findings (...)` (lines 544-557) | `audit_findings` | New findings from Claude analysis |
-| `UPDATE audits SET files_analyzed, progress_detail` (lines 584-587) | `audits` | Progress tracking (`ProgressAnalyzing` written inline with `satisfies`) |
+| `INSERT INTO audit_findings (...)` (lines 565-578) | `audit_findings` | New findings from Claude analysis |
+| `UPDATE audits SET files_analyzed, progress_detail` (lines 605-608) | `audits` | Progress tracking (`ProgressAnalyzing` written inline with `satisfies`) |
 
-**Error handling (lines 593-607):**
+**Error handling (lines 593-628):**
 
-- On first batch failure, the loop breaks immediately (`if (batchesFailed > 0) break;` at line 590).
-- After the loop, if any batch failed, the audit is marked `failed` with a message explaining partial results are unsafe for security audits (lines 596-607).
+- On first batch failure, the loop breaks immediately (`if (batchesFailed > 0) break;` at line 611).
+- After the loop, if any batch failed, the audit is marked `failed` with a message explaining partial results are unsafe for security audits (lines 617-628).
 - Sets `audits.status = 'failed'`, `error_message`, and `actual_cost_usd`.
 
 ---
 
-### Step 3b: Component Attribution (lines 609-652)
+### Step 3b: Component Attribution (lines 630-673)
 
 **Condition:** Runs only when `componentPatterns` is non-null and non-empty (i.e., when `options.componentIds` was provided).
 
@@ -336,26 +339,26 @@ For each batch:
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `SELECT id, file_path FROM audit_findings WHERE audit_id = $1` (lines 612-614) | `audit_findings` | All findings for this audit (including inherited) |
+| `SELECT id, file_path FROM audit_findings WHERE audit_id = $1` (lines 633-635) | `audit_findings` | All findings for this audit (including inherited) |
 
 **Database writes:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `UPDATE audit_findings SET component_id = $1 WHERE id = $2` (lines 632-634) | `audit_findings` | Attribute each finding to a component |
-| `INSERT INTO audit_components ... ON CONFLICT DO UPDATE` (lines 644-650) | `audit_components` | Per-component summary: `tokens_analyzed`, `findings_count` |
+| `UPDATE audit_findings SET component_id = $1 WHERE id = $2` (lines 653-655) | `audit_findings` | Attribute each finding to a component |
+| `INSERT INTO audit_components ... ON CONFLICT DO UPDATE` (lines 665-671) | `audit_components` | Per-component summary: `tokens_analyzed`, `findings_count` |
 
 **Logic:**
 
-1. For each finding, iterates component patterns and uses `minimatch` to match `file_path` against patterns. First matching component wins (line 637).
-2. Pre-computes per-component token counts from `filesToAnalyze` (lines 621-626).
+1. For each finding, iterates component patterns and uses `minimatch` to match `file_path` against patterns. First matching component wins (line 658).
+2. Pre-computes per-component token counts from `filesToAnalyze` (lines 642-647).
 3. Inserts or updates `audit_components` records with token and finding counts.
 
-After component attribution, a `ProgressDone` is written via [`writeProgress()`](#writeprogress-lines-94-99) (line 655) to mark analysis completion before synthesis begins.
+After component attribution, a `ProgressDone` is written via [`writeProgress()`](#writeprogress-lines-94-99) (line 676) to mark analysis completion before synthesis begins.
 
 ---
 
-### Step 4: Synthesis (lines 657-721)
+### Step 4: Synthesis (lines 678-742)
 
 **Status:** `synthesizing`
 
@@ -363,31 +366,31 @@ After component attribution, a `ProgressDone` is written via [`writeProgress()`]
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `SELECT severity, title, file_path, description FROM audit_findings WHERE audit_id = $1` (lines 661-664) | `audit_findings` | All findings for report synthesis |
+| `SELECT severity, title, file_path, description FROM audit_findings WHERE audit_id = $1` (lines 682-685) | `audit_findings` | All findings for report synthesis |
 
 **External calls:**
 
 | Call | Module | Purpose |
 |------|--------|---------|
-| `loadPrompt('synthesize')` (line 670) | `prompts.ts` | Load synthesis prompt template |
-| `renderPrompt(template, vars)` (line 670) | `prompts.ts` | Render with `description`, `category`, `totalFindings`, `findingsSummary` |
-| `callClaude(apiKey, systemPrompt, synthesisPrompt)` (line 678) | `claude.ts` | Final Claude call for executive summary |
+| `loadPrompt('synthesize')` (line 691) | `prompts.ts` | Load synthesis prompt template |
+| `renderPrompt(template, vars)` (line 691) | `prompts.ts` | Render with `description`, `category`, `totalFindings`, `findingsSummary` |
+| `callClaude(apiKey, systemPrompt, synthesisPrompt)` (line 699) | `claude.ts` | Final Claude call for executive summary |
 
-**System prompt for synthesis:** Hardcoded string `'You are a security audit report writer. Return valid JSON only.'` (line 678).
+**System prompt for synthesis:** Hardcoded string `'You are a security audit report writer. Return valid JSON only.'` (line 699).
 
 **Database writes:**
 
 | Query | Table | Purpose |
 |-------|-------|---------|
-| `UPDATE audits SET report_summary, max_severity, actual_cost_usd, status = 'completed', completed_at = NOW()` (lines 693-707) | `audits` | Final audit completion |
-| `UPDATE audits SET status = 'completed_with_warnings', error_message, actual_cost_usd, completed_at = NOW()` (lines 711-720) | `audits` | Completion when synthesis fails (findings are valid, summary is not) |
+| `UPDATE audits SET report_summary, max_severity, actual_cost_usd, status = 'completed', completed_at = NOW()` (lines 714-728) | `audits` | Final audit completion |
+| `UPDATE audits SET status = 'completed_with_warnings', error_message, actual_cost_usd, completed_at = NOW()` (lines 732-741) | `audits` | Completion when synthesis fails (findings are valid, summary is not) |
 
 **Logic:**
 
-1. Builds a textual summary of all findings (severity + title + file + truncated description, lines 666-668).
+1. Builds a textual summary of all findings (severity + title + file + truncated description, lines 687-689).
 2. Calls Claude to synthesize an executive report.
-3. Computes `max_severity` by iterating all findings against a severity ordering: `critical > high > medium > low > informational > none` (lines 683-691).
-4. On synthesis failure: marks audit `completed_with_warnings` instead of `failed` -- findings are already persisted and valid.
+3. Computes `max_severity` by iterating all findings against a severity ordering: `critical > high > medium > low > informational > none` (lines 704-712).
+4. On synthesis failure (lines 729-742): marks audit `completed_with_warnings` instead of `failed` -- findings are already persisted and valid.
 
 ---
 
@@ -399,11 +402,11 @@ After component attribution, a `ProgressDone` is written via [`writeProgress()`]
 function writeProgress(pool: Pool, auditId: string, detail: ProgressDetail): Promise<void>
 ```
 
-Writes a `ProgressDetail` object (JSON-stringified) to `audits.progress_detail`. Most progress writes in `runAudit()` go through this function. The per-batch progress update (lines 584-587) writes inline via `pool.query` with a `satisfies ProgressAnalyzing` assertion because it combines the progress write with the `files_analyzed` counter in a single UPDATE. All writes use the `ProgressDetail` discriminated union, ensuring the column always contains a well-typed value. Returns a `Promise<void>` (uses `.then(() => {})` to discard the query result).
+Writes a `ProgressDetail` object (JSON-stringified) to `audits.progress_detail`. Most progress writes in `runAudit()` go through this function. The per-batch progress update (lines 605-608) writes inline via `pool.query` with a `satisfies ProgressAnalyzing` assertion because it combines the progress write with the `files_analyzed` counter in a single UPDATE. All writes use the `ProgressDetail` discriminated union, ensuring the column always contains a well-typed value. Returns a `Promise<void>` (uses `.then(() => {})` to discard the query result).
 
 ---
 
-### `classifyProject()` (lines 734-786)
+### `classifyProject()` (lines 755-807)
 
 ```ts
 async function classifyProject(
@@ -413,17 +416,17 @@ async function classifyProject(
 ```
 
 **Claude API call:**
-- System prompt: `'You are a software classification expert. Analyze projects and respond with valid JSON only.'` (line 756)
+- System prompt: `'You are a software classification expert. Analyze projects and respond with valid JSON only.'` (line 777)
 - User message: rendered from `classify` prompt template with `repo_list` containing directory trees and READMEs (truncated to 5000 chars each) for all repos.
 
 **Database writes:**
-- `UPDATE projects SET category, description, involved_parties, threat_model, threat_model_source, threat_model_files, classification_audit_id` (lines 763-783)
+- `UPDATE projects SET category, description, involved_parties, threat_model, threat_model_source, threat_model_files, classification_audit_id` (lines 784-804)
 - `threat_model_source` is `'repo'` if found in repo files, `'generated'` otherwise.
 - `threat_model_files` stores the string array from `classification.threat_model_files` (file paths prefixed with repo name, e.g., `"repo-name/SECURITY.md"`).
 
 ---
 
-### `selectFiles()` (lines 790-805)
+### `selectFiles()` (lines 811-826)
 
 ```ts
 function selectFiles(allFiles: ScannedFile[], level: string): ScannedFile[]
@@ -438,21 +441,21 @@ Fallback heuristic file selection when planning returns no files.
 
 ---
 
-### `createBatches()` (lines 814-839)
+### `createBatches()` (lines 835-860)
 
 ```ts
 function createBatches(files: ScannedFile[]): Batch[]
 ```
 
-**Interface `Batch`** (lines 809-812): `{ files: ScannedFile[]; totalTokens: number }`
+**Interface `Batch`** (lines 830-833): `{ files: ScannedFile[]; totalTokens: number }`
 
-- Sorts files alphabetically by `relativePath` to keep related code together (line 818).
-- Greedily fills batches up to `MAX_BATCH_TOKENS` (150,000) tokens.
-- A single file exceeding the limit will still be placed in its own batch (the overflow check only triggers when the batch is non-empty, line 825).
+- Sorts files alphabetically by `relativePath` to keep related code together (line 839).
+- Greedily fills batches up to `MAX_BATCH_TOKENS` (100,000) rough tokens.
+- A single file exceeding the limit will still be placed in its own batch (the overflow check only triggers when the batch is non-empty, line 846).
 
 ---
 
-### `buildSystemPrompt()` (lines 843-857)
+### `buildSystemPrompt()` (lines 864-878)
 
 ```ts
 function buildSystemPrompt(classification: ClassificationResult, level: string): string
@@ -464,7 +467,7 @@ function buildSystemPrompt(classification: ClassificationResult, level: string):
 
 ---
 
-### `updateStatus()` (lines 861-863)
+### `updateStatus()` (lines 882-884)
 
 ```ts
 async function updateStatus(pool: Pool, auditId: string, status: string): Promise<void>
@@ -474,7 +477,7 @@ Single-line helper: `UPDATE audits SET status = $1 WHERE id = $2`.
 
 ---
 
-### `generateFingerprint()` (lines 865-871)
+### `generateFingerprint()` (lines 886-892)
 
 ```ts
 function generateFingerprint(finding: FindingResult): string
@@ -488,7 +491,7 @@ Generates a 16-character hex fingerprint (truncated SHA-256) for deduplication a
 
 ---
 
-### `estimateCallCost()` (lines 873-876)
+### `estimateCallCost()` (lines 894-897)
 
 ```ts
 function estimateCallCost(inputTokens: number, outputTokens: number): number
@@ -536,19 +539,19 @@ Based on Claude Opus 4.5 pricing: $5/Mtok input, $25/Mtok output.
 | 3 | 3 | Claude | Batch analysis (1 call per batch) | Default (Opus 4.5) |
 | 4 | 4 | Claude | Report synthesis | Default (Opus 4.5) |
 
-Additionally, `getCommitDate` (Step 0) makes GitHub API calls for incremental audit shallow-clone optimization.
+Additionally, `getCommitDate` (Step 0) makes GitHub API calls for incremental audit shallow-clone optimization. `countTokens` (Step 3) makes a free Anthropic API call per batch to verify exact input token count before sending to Claude.
 
 ---
 
 ## Error Handling
 
-The function uses a single top-level try/catch (lines 111-728):
+The function uses a single top-level try/catch (lines 112-749):
 
-- **Any unhandled exception:** Sets `audits.status = 'failed'` with the error message and accumulated cost (lines 722-728).
-- **Batch failure (Step 3):** Breaks on first failed batch (line 590). Fails the audit with an explicit message that partial results are unreliable for security (lines 596-607). Does **not** throw -- returns early after updating the DB.
-- **Synthesis failure (Step 4):** Does **not** fail the audit. Sets `status = 'completed_with_warnings'` since findings are already persisted and valid (lines 708-721).
-- **Diff failure (Step 2b):** Falls back to treating all files as added; logs a warning and pushes to `warnings` array (lines 268-279).
-- **shallowSince computation failure (Step 0):** Falls back to full clone; logs a warning (lines 153-155).
+- **Any unhandled exception:** Sets `audits.status = 'failed'` with the error message and accumulated cost (lines 743-748).
+- **Batch failure (Step 3):** Breaks on first failed batch (line 611). Fails the audit with an explicit message that partial results are unreliable for security (lines 617-628). Does **not** throw -- returns early after updating the DB.
+- **Synthesis failure (Step 4):** Does **not** fail the audit. Sets `status = 'completed_with_warnings'` since findings are already persisted and valid (lines 729-742).
+- **Diff failure (Step 2b):** Falls back to treating all files as added; logs a warning and pushes to `warnings` array (lines 269-281).
+- **shallowSince computation failure (Step 0):** Falls back to full clone; logs a warning (lines 154-156).
 
 [REC] Consider adding structured error types to distinguish retryable (API rate limits) from fatal (missing project) errors at the orchestration level.
 
@@ -568,10 +571,10 @@ cloning -> classifying -> planning -> analyzing -> synthesizing -> completed
 
 ## Cost Tracking
 
-- Classification: hardcoded `$0.05` (line 381).
-- Planning: `planningCostUsd` returned by `runPlanningPhase` (line 443).
-- Batch analysis: `estimateCallCost(inputTokens, outputTokens)` per batch (line 521).
-- Synthesis: `estimateCallCost(inputTokens, outputTokens)` (line 679).
+- Classification: hardcoded `$0.05` (line 382).
+- Planning: `planningCostUsd` returned by `runPlanningPhase` (line 444).
+- Batch analysis: `estimateCallCost(inputTokens, outputTokens)` per batch (line 542).
+- Synthesis: `estimateCallCost(inputTokens, outputTokens)` (line 700).
 - Accumulated in `actualCostUsd` and written to `audits.actual_cost_usd` on completion or failure.
 
 ---
@@ -582,7 +585,7 @@ cloning -> classifying -> planning -> analyzing -> synthesizing -> completed
 |--------|-------------|
 | `pg` | `Pool` |
 | `crypto` | `createHash` |
-| `./claude` | `callClaude`, `parseJsonResponse` |
+| `./claude` | `callClaude`, `countTokens`, `parseJsonResponse` |
 | `./git` | `cloneOrUpdate`, `scanCodeFiles`, `readFileContent`, `getDefaultBranchName`, `diffBetweenCommits`, `ScannedFile` |
 | `./tokens` | `roughTokenCount`, `SECURITY_CRITICAL_PATTERNS`, `BUDGET_PERCENTAGES` |
 | `./github` | `getCommitDate` |

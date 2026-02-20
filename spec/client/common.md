@@ -1,6 +1,6 @@
 # common.ts -- Shared Client Utilities
 
-**Source**: [`common.ts`](../../src/client/common.ts#L1-L452)
+**Source**: [`common.ts`](../../src/client/common.ts#L1-L475)
 
 All exports are global functions/variables (no ES module exports). Loaded by every HTML page.
 
@@ -110,7 +110,15 @@ Thrown by `apiFetch` on non-OK responses. Preserves the HTTP status code and par
 
 ---
 
-## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L312-L356)
+## [Shared Renderer: renderInvolvedParties](../../src/client/common.ts#L309-L331)
+
+| Function | Signature | Description |
+|---|---|---|
+| `renderInvolvedParties` | `(targetId: string, parties: Record<string, unknown> \| null) => boolean` | Renders involved parties (vendor, operators, end_users, networks) as a middot-separated line. Returns `true` if content was rendered. Shows and populates the target element. |
+
+---
+
+## [Shared Handler: attachAddAsProjectHandlers](../../src/client/common.ts#L333-L380)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -126,14 +134,14 @@ Thrown by `apiFetch` on non-OK responses. Preserves the HTTP status code and par
 
 ---
 
-## [Auth State](../../src/client/common.ts#L358-L424)
+## [Auth State](../../src/client/common.ts#L382-L448)
 
-### [Interface: `AuthUser`](../../src/client/common.ts#L360-L365)
+### [Interface: `AuthUser`](../../src/client/common.ts#L384-L389)
 ```ts
 interface AuthUser { id: string; username: string; avatarUrl?: string; githubType: string }
 ```
 
-### [Variables](../../src/client/common.ts#L367-L368)
+### [Variables](../../src/client/common.ts#L391-L392)
 | Variable | Type | Description |
 |---|---|---|
 | `currentUser` | `AuthUser \| null` | Populated by `checkAuth()`. Readable by all page modules. |
@@ -155,7 +163,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## [Navigation](../../src/client/common.ts#L426-L442)
+## [Navigation](../../src/client/common.ts#L450-L466)
 
 | Function | Signature | Description |
 |---|---|---|
@@ -166,7 +174,7 @@ interface AuthUser { id: string; username: string; avatarUrl?: string; githubTyp
 
 ---
 
-## [Init Sequence](../../src/client/common.ts#L444-L452)
+## [Init Sequence](../../src/client/common.ts#L468-L475)
 
 ```ts
 document.addEventListener('DOMContentLoaded', async () => {

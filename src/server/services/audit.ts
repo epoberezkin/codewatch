@@ -795,7 +795,7 @@ async function classifyProject(
       classification.category,
       classification.description,
       JSON.stringify(classification.involved_parties),
-      classification.threat_model?.generated || JSON.stringify(classification.threat_model),
+      JSON.stringify(classification.threat_model),
       classification.threat_model_found ? 'repo' : 'generated',
       classification.threat_model_files || [],
       auditId,

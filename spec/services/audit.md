@@ -421,8 +421,11 @@ async function classifyProject(
 
 **Database writes:**
 - `UPDATE projects SET category, description, involved_parties, threat_model, threat_model_source, threat_model_files, classification_audit_id` (lines 784-804)
+- `threat_model` is always stored as `JSON.stringify(classification.threat_model)`, preserving the full object including `parties` array. Parsed back via `parseThreatModel()` in the API layer.
 - `threat_model_source` is `'repo'` if found in repo files, `'generated'` otherwise.
 - `threat_model_files` stores the string array from `classification.threat_model_files` (file paths prefixed with repo name, e.g., `"repo-name/SECURITY.md"`).
+
+[GAP] Projects classified before the storage fix have `threat_model` stored as plain text (not JSON) when `threat_model_source = 'generated'`, causing the `parties` array to be lost. Re-classification regenerates correctly.
 
 ---
 

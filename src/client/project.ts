@@ -131,6 +131,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       show('classification-section');
       setText('project-category', project.category.replace(/_/g, ' '));
 
+      // Classification description
+      if (project.description) {
+        setText('classification-description', project.description);
+        show('classification-description');
+      }
+
+      // Involved parties
+      renderInvolvedParties('involved-parties', project.involvedParties);
+
       // Threat model display: evaluation text → source file links → parties table
       renderThreatModel('threat-model-summary', project);
     }

@@ -306,6 +306,30 @@ function renderThreatModel(
   return true;
 }
 
+// ---------- Shared: renderInvolvedParties ----------
+
+// Spec: spec/client/common.md#renderInvolvedParties
+function renderInvolvedParties(
+  targetId: string,
+  parties: Record<string, unknown> | null
+): boolean {
+  if (!parties) return false;
+  const labels: Record<string, string> = {
+    vendor: 'Vendor', operators: 'Operators', end_users: 'End Users', networks: 'Networks',
+  };
+  const items: string[] = [];
+  for (const [key, label] of Object.entries(labels)) {
+    const val = parties[key];
+    if (!val) continue;
+    const text = Array.isArray(val) ? val.join(', ') : String(val);
+    if (text) items.push(`<strong>${label}:</strong> ${escapeHtml(text)}`);
+  }
+  if (items.length === 0) return false;
+  setHtml(targetId, items.join(' &middot; '));
+  show(targetId);
+  return true;
+}
+
 // ---------- Shared: attachAddAsProjectHandlers ----------
 
 // Spec: spec/client/common.md#attachAddAsProjectHandlers

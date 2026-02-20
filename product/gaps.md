@@ -273,3 +273,9 @@ The gate password could be brute-forced.
 If analysis returns zero components, Step 2 is not shown and the analyze section hides with no explanation.
 
 **REC:** Show an explicit "No components found" message when analysis returns zero results.
+
+### GAP: Existing projects have corrupted threat_model data
+**Source:** [audit.md](../spec/services/audit.md)
+Projects classified before the storage fix have `threat_model` stored as plain text instead of JSON when `threat_model_source = 'generated'`. The `parties` array is lost. Re-running classification (re-analyzing components) regenerates the data correctly.
+
+**REC:** Consider a one-time migration or background job to re-classify affected projects, or prompt users to re-analyze.

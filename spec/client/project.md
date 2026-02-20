@@ -22,7 +22,7 @@ Displays a project dashboard with:
 
 ```ts
 interface ProjectDetail {
-  id, name, description, githubOrg, category, license,
+  id, name, description, githubOrg, githubEntityType, category, license,
   involvedParties, threatModel, threatModelParties, threatModelFileLinks, threatModelSource,
   totalFiles, totalTokens, createdBy, creatorUsername,
   ownership: { isOwner, role, needsReauth } | null;

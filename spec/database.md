@@ -24,6 +24,7 @@ CodeWatch uses PostgreSQL with the `pgcrypto` extension for UUID generation (`ge
 | [003_branch_selection.sql](../sql/003_branch_selection.sql) | `project_repos.branch` column for per-project branch overrides. |
 | [004_schema_fixes.sql](../sql/004_schema_fixes.sql) | FK cascade fixes (`ON DELETE SET NULL`, `ON DELETE CASCADE`), new indexes, self-reference CHECK on project_dependencies, adds `completed_with_warnings` to audit status. |
 | [005_threat_model_files.sql](../sql/005_threat_model_files.sql) | `projects.threat_model_files TEXT[]` column for storing classification threat model file paths. |
+| [006_entity_type.sql](../sql/006_entity_type.sql) | `projects.github_entity_type TEXT` column for storing GitHub entity type (User or Organization). |
 
 ### Internal Migration Table
 
@@ -107,6 +108,7 @@ Created by `db.ts`, not by any SQL migration file.
 | `component_analysis_id` | `UUID` | FK -> `component_analyses(id)` `ON DELETE SET NULL` | — | 002 (FK fix in 004) |
 | `components_analyzed_at` | `TIMESTAMPTZ` | — | — | 002 |
 | `threat_model_files` | `TEXT[]` | — | `'{}'` | 005 |
+| `github_entity_type` | `TEXT` | — | — | 006 |
 
 **CHECK constraints**:
 - `category IN ('library', 'cli_tool', 'build_dependency', 'gui_client', 'client_server', 'decentralized_serverless', 'decentralized_client_server')`

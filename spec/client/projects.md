@@ -15,7 +15,7 @@ Browse and filter all projects (public view) or user-owned projects ("My Project
 
 ```ts
 interface BrowseProject {
-  id, name, githubOrg, category, license,
+  id, name, githubOrg, githubEntityType, category, license,
   publicAuditCount, latestSeverity?, latestAuditDate,
   createdAt, auditCount?,
   ownership?: { isOwner, role, needsReauth };

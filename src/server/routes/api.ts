@@ -279,13 +279,20 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
       return;
     }
 
+    // Look up entity type (User or Organization)
+    let githubEntityType: string | null = null;
+    try {
+      const entity = await getGitHubEntity(githubOrg, (req as any).githubToken);
+      githubEntityType = entity.type || null;
+    } catch { /* non-critical */ }
+
     // Create project
     const projectName = deriveProjectName(repoInputs.map(r => r.name));
     const { rows: projectRows } = await pool.query(
-      `INSERT INTO projects (name, github_org, created_by)
-       VALUES ($1, $2, $3)
+      `INSERT INTO projects (name, github_org, created_by, github_entity_type)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [projectName, githubOrg, userId]
+      [projectName, githubOrg, userId, githubEntityType]
     );
     const projectId = projectRows[0].id;
 
@@ -426,7 +433,7 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
 
     // Main query
     const mainQuery = `
-      SELECT p.id, p.name, p.github_org, p.category, p.created_by, p.created_at,
+      SELECT p.id, p.name, p.github_org, p.github_entity_type, p.category, p.created_by, p.created_at,
              (SELECT COUNT(*) FROM audits a WHERE a.project_id = p.id AND a.is_public = TRUE) as public_audit_count,
              (SELECT COUNT(*) FROM audits a WHERE a.project_id = p.id) as audit_count,
              (SELECT a.max_severity FROM audits a WHERE a.project_id = p.id AND a.status = 'completed'
@@ -471,6 +478,7 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
         id: p.id,
         name: deriveProjectName(p.repo_names || []),
         githubOrg: p.github_org,
+        githubEntityType: p.github_entity_type || null,
         category: p.category,
         // License from DB aggregate: string_agg of repo licenses, null when no repos have license data
         license: p.license || null,
@@ -656,6 +664,7 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
       name: deriveProjectName(repos.map((r: any) => r.repo_name).sort()),
       description: project.description || '',
       githubOrg: project.github_org,
+      githubEntityType: project.github_entity_type || null,
       category: project.category,
       license,
       involvedParties: project.involved_parties || null,
@@ -1316,7 +1325,7 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT a.*, p.name as project_name, p.github_org
+      `SELECT a.*, p.name as project_name, p.github_org, p.github_entity_type
        FROM audits a
        JOIN projects p ON p.id = a.project_id
        WHERE a.id = $1`,
@@ -1364,6 +1373,7 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
       projectId: audit.project_id,
       projectName: deriveProjectName(auditRepoNames),
       githubOrg: audit.github_org,
+      githubEntityType: audit.github_entity_type || null,
       status: audit.status,
       auditLevel: audit.audit_level,
       isIncremental: audit.is_incremental,
@@ -1398,6 +1408,7 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(
       `SELECT a.*, p.name as project_name, p.created_by as project_owner_id,
+              p.github_org, p.github_entity_type,
               p.category as project_category, p.description as project_description,
               p.involved_parties, p.threat_model, p.threat_model_source,
               p.threat_model_files, p.classification_audit_id
@@ -1586,6 +1597,8 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
       id: audit.id,
       projectId: audit.project_id,
       projectName: deriveProjectName(reportRepoNames),
+      githubOrg: audit.github_org,
+      githubEntityType: audit.github_entity_type || null,
       auditLevel: audit.audit_level,
       isIncremental: audit.is_incremental,
       isOwner,
@@ -2518,7 +2531,7 @@ router.get('/reports', async (_req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(
       `SELECT a.id, a.audit_level, a.max_severity, a.completed_at,
-              p.name as project_name, p.github_org,
+              p.name as project_name, p.github_org, p.github_entity_type,
               (SELECT array_agg(r.repo_name ORDER BY r.repo_name)
                FROM project_repos pr JOIN repositories r ON r.id = pr.repo_id
                WHERE pr.project_id = p.id) as repo_names
@@ -2536,6 +2549,7 @@ router.get('/reports', async (_req: Request, res: Response) => {
       completedAt: r.completed_at,
       projectName: deriveProjectName(r.repo_names || []),
       githubOrg: r.github_org,
+      githubEntityType: r.github_entity_type || null,
     })));
   } catch (err) {
     console.error('Error listing reports:', err);

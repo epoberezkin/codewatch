@@ -60,6 +60,7 @@ interface AuditStatus {
   projectId: string;
   projectName: string;
   githubOrg: string;
+  githubEntityType: string | null;
   status: string;  // pending | cloning | classifying | planning | estimating | analyzing | synthesizing | completed | completed_with_warnings | failed
   auditLevel: string;
   isIncremental: boolean;
@@ -155,10 +156,12 @@ Rendering logic:
 
 | ID | Purpose |
 |---|---|
+| `audit-title` | Project name as link to project page |
+| `audit-org` | "GitHub user/org: {name}" |
 | `audit-status-badge` | Status badge container |
 | `audit-level` | Audit level text |
 | `audit-owner-badge` | Owner badge |
-| `audit-commit` | Commit SHA info |
+| `audit-commit` | Commit SHA info (single-repo: `@sha`, multi-repo: `repo@sha`) |
 | `audit-type` | Incremental badge |
 | `progress-text` | Progress status label |
 | `progress-count` | `X / Y files` counter |

@@ -31,7 +31,7 @@ Configure and start a security audit with full cost transparency. The page loads
 | Element | Detail |
 |---|---|
 | Project name | `#project-name` -- derived from repo names: 1-3 repos joined with " + ", 4+ shows first 2 + "N more" |
-| Description | `#project-description` -- always `GitHub org: <org>` |
+| Description | `#project-description` -- "GitHub user: {name}" or "GitHub org: {name}" based on `githubEntityType` |
 | Ownership badge | `#ownership-badge` -- rendered inside the `<h1>` via `renderOwnershipBadge()` |
 
 **Ownership badge states:**

@@ -26,7 +26,8 @@ interface Finding {
 }
 
 interface ReportData {
-  id, projectId, projectName, auditLevel, isIncremental,
+  id, projectId, projectName, githubOrg, githubEntityType,
+  auditLevel, isIncremental,
   isOwner, isRequester, isPublic,
   publishableAfter, ownerNotified, ownerNotifiedAt,
   maxSeverity, category, projectDescription,
@@ -154,9 +155,9 @@ Rendering sections (in order):
 
 | ID | Purpose |
 |---|---|
-| `report-title` | Report heading text |
-| `report-meta` | Meta info (project, date, level, commits) |
-| `back-to-project` | Back to project link |
+| `report-title` | Project name as link to project page |
+| `report-meta` | Meta info (org/user, date, level, commits) |
+| `back-to-project-link` | Back to project link (in owner controls) |
 | `access-tier-badge` | Access tier badge container |
 | `severity-summary` | Severity count badges |
 | `owner-controls` | Owner action buttons container |

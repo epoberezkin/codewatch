@@ -29,10 +29,12 @@ Displays metadata about the running audit:
 
 | Element | ID | Content |
 |---|---|---|
+| Title | `audit-title` | Project name as link to `/project.html?projectId={projectId}` (replaces static "Audit Progress" text) |
+| Org/user | `audit-org` | "GitHub user: {name}" or "GitHub org: {name}" based on `githubEntityType` |
 | Status badge | `audit-status-badge` | Colored badge: `badge-pending`, `badge-running`, `badge-completed`, or `badge-failed` depending on phase |
 | Owner badge | `audit-owner-badge` | Rendered via `renderOwnershipBadge()` if `isOwner` is true |
 | Audit level | `audit-level` | Text label (e.g., "full", "thorough", "opportunistic") |
-| Commit SHA | `audit-commit` | Format: `repoName@abc1234`, comma-separated if multiple repos |
+| Commit SHA | `audit-commit` | Single-repo: `@abc1234`. Multi-repo: `repoName@abc1234`, comma-separated |
 | Type | `audit-type` | Shows `<span class="badge badge-running">incremental</span>` if `isIncremental` is true; empty otherwise |
 
 ### Progress Section

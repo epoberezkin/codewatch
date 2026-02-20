@@ -46,6 +46,7 @@ interface AuditStatus {
   projectId: string;
   projectName: string;
   githubOrg: string;
+  githubEntityType: string | null;
   status: string;
   auditLevel: string;
   isIncremental: boolean;
@@ -128,15 +129,26 @@ document.addEventListener('DOMContentLoaded', () => {
     setHtml('audit-status-badge', `<span class="badge ${statusMap[data.status] || ''}">${escapeHtml(data.status)}</span>`);
     setText('audit-level', data.auditLevel);
 
+    // Project name in title + org/user in meta
+    if (data.projectName) {
+      setHtml('audit-title',
+        `<a href="/project.html?projectId=${data.projectId}">${escapeHtml(data.projectName)}</a>`);
+    }
+    if (data.githubOrg) {
+      const entityLabel = data.githubEntityType === 'User' ? 'GitHub user' : 'GitHub org';
+      setText('audit-org', `${entityLabel}: ${data.githubOrg}`);
+    }
+
     // Ownership badge
     if (data.isOwner) {
       setHtml('audit-owner-badge', renderOwnershipBadge({ isOwner: true }));
     }
 
-    // Commit info
+    // Commit info: for single-repo, omit repo name (already in title)
     if (data.commits.length > 0) {
+      const isSingleRepo = data.commits.length === 1;
       const commitText = data.commits.map(c =>
-        `${c.repoName}@${c.commitSha.substring(0, 7)}`
+        isSingleRepo ? `@${c.commitSha.substring(0, 7)}` : `${c.repoName}@${c.commitSha.substring(0, 7)}`
       ).join(', ');
       setText('audit-commit', commitText);
     }

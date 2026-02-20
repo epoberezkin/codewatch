@@ -24,6 +24,7 @@ interface ProjectData {
   name: string;
   description: string;
   githubOrg: string;
+  githubEntityType: string | null;
   category: string;
   createdBy: string | null;
   ownership: { isOwner: boolean; role: string | null; needsReauth: boolean } | null;
@@ -151,7 +152,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? repoNames.join(' + ')
       : `${repoNames.slice(0, 2).join(' + ')} + ${repoNames.length - 2} more`;
     setText('project-name', projectTitle || project.name);
-    setText('project-description', `GitHub org: ${project.githubOrg}`);
+    const entityLabel = project.githubEntityType === 'User' ? 'GitHub user' : 'GitHub org';
+    setText('project-description', `${entityLabel}: ${project.githubOrg}`);
   }
 
   // Spec: spec/client/estimate.md#renderProjectStats

@@ -25,6 +25,8 @@ interface ReportData {
   id: string;
   projectId: string;
   projectName: string;
+  githubOrg: string;
+  githubEntityType: string | null;
   auditLevel: string;
   isIncremental: boolean;
   isOwner: boolean;
@@ -105,31 +107,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Spec: spec/client/report.md#renderReport
   function renderReport(data: ReportData) {
-    // Header
-    setText('report-title', `Audit Report: ${data.projectName}`);
+    // Header: project name as linked title, org/user + audit meta below
+    setHtml('report-title',
+      `<a href="/project.html?projectId=${data.projectId}">${escapeHtml(data.projectName)}</a>`);
+    const isSingleRepo = data.commits.length === 1;
+    const commitsHtml = data.commits.map(c => {
+      // For single-repo, omit repo name (it's already in the title)
+      const label = isSingleRepo ? `@${c.commitSha.substring(0, 7)}` : `${c.repoName}@${c.commitSha.substring(0, 7)}`;
+      return `<span class="text-mono">${escapeHtml(label)}</span>`;
+    }).join('');
+    const entityLabel = data.githubEntityType === 'User' ? 'GitHub user' : 'GitHub org';
     setHtml('report-meta', `
-      <span><a href="/project.html?projectId=${data.projectId}">${escapeHtml(data.projectName)}</a></span>
+      <span>${escapeHtml(entityLabel)}: ${escapeHtml(data.githubOrg)}</span>
       <span>${formatDate(data.completedAt || data.createdAt)}</span>
       <span>${escapeHtml(data.auditLevel)}${data.isIncremental ? ' (incremental)' : ''}</span>
-      ${data.commits.map(c => `<span class="text-mono">${escapeHtml(c.repoName)}@${c.commitSha.substring(0, 7)}</span>`).join('')}
+      ${commitsHtml}
     `);
 
     // "Back to Project" link (Issue #28)
-    const backLink = $('back-to-project');
+    const backLink = $('back-to-project-link') as HTMLAnchorElement | null;
     if (backLink) {
-      (backLink as HTMLAnchorElement).href = `/project.html?projectId=${data.projectId}`;
-      show(backLink);
-    } else {
-      // Create one if not in HTML
-      const reportHeader = $('report-title')?.parentElement;
-      if (reportHeader) {
-        const link = document.createElement('a');
-        link.href = `/project.html?projectId=${data.projectId}`;
-        link.className = 'btn btn-sm btn-secondary';
-        link.textContent = 'Back to Project';
-        link.id = 'back-to-project';
-        reportHeader.prepend(link);
-      }
+      backLink.href = `/project.html?projectId=${data.projectId}`;
     }
 
     // Access tier badge

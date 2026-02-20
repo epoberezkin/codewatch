@@ -28,7 +28,7 @@ Top card, always visible. Shows a loading spinner while the API call is in fligh
   - `re-auth needed` link (yellow, links to `/auth/github?returnTo=...`) when the user has a stale token and is not yet verified as owner (`renderOwnershipBadge` from common.ts handles this logic).
   - No badge for anonymous visitors or non-members.
 - **"New Audit" button** (top-right): links to `/estimate.html?projectId=<id>`.
-- **Description**: Always shows `GitHub org: <org>`.
+- **Description**: Shows `GitHub user: <name>` or `GitHub org: <name>` based on the project's `githubEntityType` field (stored at project creation from the GitHub API).
 
 ### 2. Classification & Threat Model
 

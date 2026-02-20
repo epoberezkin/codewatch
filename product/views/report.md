@@ -62,14 +62,14 @@ The `accessTier` field (`'owner' | 'requester' | 'public'`) controls what conten
 
 | Element | ID | Content |
 |---|---|---|
-| Title | `report-title` | "Audit Report: {projectName}" |
-| Project link | `report-project` | Links to `/project.html?projectId={projectId}` |
-| Date | `report-date` | `completedAt` (falls back to `createdAt`), formatted via `formatDate()` |
-| Level | `report-level` | Audit level text + " (incremental)" suffix if applicable |
-| Commit SHAs | `report-commit` | `repoName@abc1234` in monospace, one per repo |
+| Title | `report-title` | Project name as link to `/project.html?projectId={projectId}` |
+| Org/user | (in `report-meta`) | "GitHub user: {name}" or "GitHub org: {name}" based on `githubEntityType` |
+| Date | (in `report-meta`) | `completedAt` (falls back to `createdAt`), formatted via `formatDate()` |
+| Level | (in `report-meta`) | Audit level text + " (incremental)" suffix if applicable |
+| Commit SHAs | (in `report-meta`) | For single-repo: `@abc1234`. For multi-repo: `repoName@abc1234` per repo. Monospace. |
 | Access tier badge | `access-tier-badge` | Colored badge via `renderAccessTierBadge(accessTier)` |
 
-A "Back to Project" link (Issue #28) is rendered either from the existing element or dynamically prepended to the header.
+The "Back to Project" link in owner controls uses `back-to-project-link` (in HTML template). The title itself is also a link to the project page.
 
 ### 2. Severity Summary
 

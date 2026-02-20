@@ -30,7 +30,7 @@ interface EstimateData {
 }
 
 interface ProjectData {
-  id, name, description, githubOrg, category, createdBy;
+  id, name, description, githubOrg, githubEntityType, category, createdBy;
   ownership: { isOwner, role, needsReauth } | null;
   repos: Array<{ id, repoName, language, stars, defaultBranch, branch }>;
 }

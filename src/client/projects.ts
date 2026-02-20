@@ -8,6 +8,7 @@ interface BrowseProject {
   id: string;
   name: string;
   githubOrg: string;
+  githubEntityType: string | null;
   category: string | null;
   license: string | null;
   publicAuditCount: number;

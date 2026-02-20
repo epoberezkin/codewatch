@@ -206,6 +206,7 @@ vi.mock('../../src/server/services/claude', () => ({
     };
   },
   parseJsonResponse: <T>(content: string): T => JSON.parse(content),
+  countTokens: async () => 1000,
 }));
 
 // Helper to wait for audit completion

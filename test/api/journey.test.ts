@@ -169,6 +169,7 @@ vi.mock('../../src/server/services/claude', () => ({
     };
   },
   parseJsonResponse: <T>(content: string): T => JSON.parse(content),
+  countTokens: async () => 1000,
 }));
 
 async function waitForAudit(baseUrl: string, auditId: string, maxAttempts = 60): Promise<any> {

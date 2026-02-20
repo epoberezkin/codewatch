@@ -64,7 +64,7 @@ Request body:
 Server-side processing:
 1. **Validate inputs**: Check `githubOrg` format (`^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$`), validate each repo name (`^[a-zA-Z0-9._-]+$`), and validate branch strings.
 2. **Deduplication check**: Query for an existing project with the same `github_org`, `created_by`, and identical sorted repo names.
-3. **Create project**: Insert into `projects` table with `name` defaulting to the org name.
+3. **Create project**: Insert into `projects` table with `name` derived from repo names (1–3 repos joined with ' + ', 4+ shows first 2 + 'N more').
 4. **Upsert repositories**: For each repo, upsert into the `repositories` table (keyed by `repo_url`), then link via `project_repos` with the optional branch.
 5. **Resolve ownership**: Check if the creator is the owner of the GitHub entity.
 6. **Return**: `{ projectId, repos, ownership }`.

@@ -785,7 +785,7 @@ describe('Audit API', () => {
       res = await fetch(`${ctx.baseUrl}/api/reports`);
       reports = await res.json();
       expect(reports).toHaveLength(1);
-      expect(reports[0].projectName).toBe('test-org');
+      expect(reports[0].projectName).toBe('repo-alpha');
       expect(reports[0].maxSeverity).toBe('critical');
     });
   });

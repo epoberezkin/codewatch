@@ -21,6 +21,14 @@ function escapeILike(input: string): string {
   return input.replace(/[%_\\]/g, ch => '\\' + ch);
 }
 
+// Spec: spec/api.md#deriveProjectName
+// Derive display name from repo names: 1-3 joined with ' + ', 4+ shows first 2 + 'N more'
+function deriveProjectName(repoNames: string[]): string {
+  if (repoNames.length === 0) return '';
+  if (repoNames.length <= 3) return repoNames.join(' + ');
+  return `${repoNames.slice(0, 2).join(' + ')} + ${repoNames.length - 2} more`;
+}
+
 // Helper: resolve session info from session cookie
 interface SessionInfo {
   userId: string;
@@ -272,7 +280,7 @@ router.post('/projects', requireAuth as any, async (req: Request, res: Response)
     }
 
     // Create project
-    const projectName = githubOrg; // Default name to org name
+    const projectName = deriveProjectName(repoInputs.map(r => r.name));
     const { rows: projectRows } = await pool.query(
       `INSERT INTO projects (name, github_org, created_by)
        VALUES ($1, $2, $3)
@@ -409,7 +417,7 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
       paramIdx++;
     }
     if (search) {
-      filterClauses.push(`(p.name ILIKE $${paramIdx} OR p.github_org ILIKE $${paramIdx})`);
+      filterClauses.push(`(p.name ILIKE $${paramIdx} OR p.github_org ILIKE $${paramIdx} OR EXISTS (SELECT 1 FROM project_repos pr JOIN repositories r ON r.id = pr.repo_id WHERE pr.project_id = p.id AND r.repo_name ILIKE $${paramIdx}))`);
       queryParams.push(`%${escapeILike(String(search))}%`);
       paramIdx++;
     }
@@ -427,7 +435,10 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
               ORDER BY a.completed_at DESC LIMIT 1) as latest_audit_date,
              (SELECT string_agg(DISTINCT r.license, ', ') FROM repositories r
               JOIN project_repos pr ON pr.repo_id = r.id
-              WHERE pr.project_id = p.id AND r.license IS NOT NULL) as license
+              WHERE pr.project_id = p.id AND r.license IS NOT NULL) as license,
+             (SELECT array_agg(r.repo_name ORDER BY r.repo_name) FROM repositories r
+              JOIN project_repos pr ON pr.repo_id = r.id
+              WHERE pr.project_id = p.id) as repo_names
       FROM projects p
       WHERE ${baseCondition}${filterWhere}
       ORDER BY p.created_at DESC LIMIT 50`;
@@ -458,7 +469,7 @@ router.get('/projects/browse', async (req: Request, res: Response) => {
       const ownership = orgOwnership.get(p.github_org);
       return {
         id: p.id,
-        name: p.name,
+        name: deriveProjectName(p.repo_names || []),
         githubOrg: p.github_org,
         category: p.category,
         // License from DB aggregate: string_agg of repo licenses, null when no repos have license data
@@ -642,7 +653,7 @@ router.get('/projects/:id', async (req: Request, res: Response) => {
 
     res.json({
       id: project.id,
-      name: project.name,
+      name: deriveProjectName(repos.map((r: any) => r.repo_name).sort()),
       description: project.description || '',
       githubOrg: project.github_org,
       category: project.category,
@@ -1346,10 +1357,12 @@ router.get('/audit/:id', async (req: Request, res: Response) => {
       [auditId]
     );
 
+    const auditRepoNames = [...new Set(commits.map((c: any) => c.repo_name))].sort() as string[];
+
     res.json({
       id: audit.id,
       projectId: audit.project_id,
-      projectName: audit.project_name,
+      projectName: deriveProjectName(auditRepoNames),
       githubOrg: audit.github_org,
       status: audit.status,
       auditLevel: audit.audit_level,
@@ -1567,10 +1580,12 @@ router.get('/audit/:id/report', async (req: Request, res: Response) => {
     }
     const reportThreatModelFileLinks = buildThreatModelFileLinks(audit.threat_model_files, reportClassCommits);
 
+    const reportRepoNames = [...new Set(commits.map((c: any) => c.repo_name))].sort() as string[];
+
     res.json({
       id: audit.id,
       projectId: audit.project_id,
-      projectName: audit.project_name,
+      projectName: deriveProjectName(reportRepoNames),
       auditLevel: audit.audit_level,
       isIncremental: audit.is_incremental,
       isOwner,
@@ -2073,13 +2088,13 @@ router.post('/audit/:id/notify-owner', requireAuth as any, async (req: Request, 
          JOIN project_repos pr ON pr.repo_id = r.id
          JOIN audits a ON a.project_id = pr.project_id
          WHERE a.id = $1
-         ORDER BY r.stars DESC NULLS LAST
-         LIMIT 1`,
+         ORDER BY r.stars DESC NULLS LAST`,
         [auditId]
       );
 
       if (repoRows.length > 0) {
         const repoName = repoRows[0].repo_name;
+        const notifyProjectName = deriveProjectName(repoRows.map((r: any) => r.repo_name).sort());
         const findingCount = await pool.query(
           'SELECT COUNT(*) as count FROM audit_findings WHERE audit_id = $1',
           [auditId]
@@ -2088,7 +2103,7 @@ router.post('/audit/:id/notify-owner', requireAuth as any, async (req: Request, 
         const maxSev = audit.max_severity || 'none';
 
         const title = `[CodeWatch] Security audit completed - ${count} finding${count !== 1 ? 's' : ''} (max: ${maxSev})`;
-        const body = `A community member has run a security audit on **${audit.project_name}** using [CodeWatch](https://codewatch.dev).
+        const body = `A community member has run a security audit on **${notifyProjectName}** using [CodeWatch](https://codewatch.dev).
 
 **Results:**
 - Total findings: ${count}
@@ -2503,7 +2518,10 @@ router.get('/reports', async (_req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(
       `SELECT a.id, a.audit_level, a.max_severity, a.completed_at,
-              p.name as project_name, p.github_org
+              p.name as project_name, p.github_org,
+              (SELECT array_agg(r.repo_name ORDER BY r.repo_name)
+               FROM project_repos pr JOIN repositories r ON r.id = pr.repo_id
+               WHERE pr.project_id = p.id) as repo_names
        FROM audits a
        JOIN projects p ON p.id = a.project_id
        WHERE a.is_public = TRUE AND a.status = 'completed'
@@ -2516,7 +2534,7 @@ router.get('/reports', async (_req: Request, res: Response) => {
       auditLevel: r.audit_level,
       maxSeverity: r.max_severity,
       completedAt: r.completed_at,
-      projectName: r.project_name,
+      projectName: deriveProjectName(r.repo_names || []),
       githubOrg: r.github_org,
     })));
   } catch (err) {

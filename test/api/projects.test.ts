@@ -200,7 +200,7 @@ describe('Projects API', () => {
 
       const project = await res.json();
       expect(project.id).toBe(projectId);
-      expect(project.name).toBe('test-org');
+      expect(project.name).toBe('repo-alpha');
       expect(project.githubOrg).toBe('test-org');
       expect(project.repos).toHaveLength(1);
       expect(project.repos[0].repoName).toBe('repo-alpha');

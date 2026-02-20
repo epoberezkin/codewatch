@@ -279,7 +279,7 @@ describe('End-to-end journey', () => {
     // Step 11: Verify public reports listing
     const publicReports = await (await fetch(`${ctx.baseUrl}/api/reports`)).json();
     expect(publicReports).toHaveLength(1);
-    expect(publicReports[0].projectName).toBe('journey-org');
+    expect(publicReports[0].projectName).toBe('journey-repo');
     expect(publicReports[0].maxSeverity).toBe('high');
 
     // Step 12: Verify all findings visible after publish

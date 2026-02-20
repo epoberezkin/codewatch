@@ -20,7 +20,7 @@ The ranked list of files selected by Claude during the planning phase, with prio
 A previously completed audit selected as the reference point for an incremental audit; its commit SHAs and findings are used to compute diffs and inherit results. *See: [audit-lifecycle.md](flows/audit-lifecycle.md)*
 
 ### Batch (Analysis Batch)
-A group of files totaling up to 150,000 tokens, sent together in a single Claude API call during the analysis phase; files are sorted by directory path to keep related code together. *See: [audit-lifecycle.md](flows/audit-lifecycle.md)*
+A group of files totaling up to 100,000 rough tokens (verified against a 195,000 exact-token limit via the free `countTokens` API), sent together in a single Claude API call during the analysis phase; files are sorted by directory path to keep related code together. Batches that exceed the exact-token limit are automatically split in half and re-queued. *See: [audit-lifecycle.md](flows/audit-lifecycle.md)*
 
 ### BYOK (Bring Your Own Key)
 The model where users supply their own Anthropic API key (`sk-ant-...`) to pay for Claude usage, rather than CodeWatch bearing the cost. *See: [README.md](README.md)*

@@ -499,6 +499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateAnalysisCostHint(precise);
       estimateData = precise;
       projectTotalTokens = precise.totalTokens;
+      updateStartButton();
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Failed to get precise estimate');
     } finally {

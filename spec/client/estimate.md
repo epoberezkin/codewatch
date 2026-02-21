@@ -92,11 +92,11 @@ interface AnalysisStatus {
 | `onComponentSelectionChange` | `() => Promise<void>` | L306 | Rebuilds `selectedComponentIds` from checkboxes, calls `updateScopedEstimate`, `updateStartButton` |
 | `updateScopedEstimate` | `() => Promise<void>` | L317 | Posts to `/api/estimate/components` with selected component IDs. Updates level card prices. Shows selection summary label. |
 
-### [Start Button](../../src/client/estimate.ts#L510-L541)
+### [Start Button](../../src/client/estimate.ts#L509-L540)
 
 | Function | Signature | Line | Description |
 |---|---|---|---|
-| `updateStartButton` | `() => void` | L511 | Validates: has components and valid API key. Sets button text with cost estimate. Shows/hides key format error. |
+| `updateStartButton` | `() => void` | L513 | Validates: has components and valid API key. Sets button text with cost estimate. Shows/hides key format error. |
 
 ### [Analyze Button](../../src/client/estimate.ts#L385-L390)
 
@@ -119,14 +119,14 @@ interface AnalysisStatus {
 | `.estimate-card` (each) | click, keydown (Enter/Space) | L455-L483 | Selects level card, shows step 3, updates start button. Cards have `role="button"`, `tabindex="0"`, `aria-pressed`. |
 | `#api-key` (input) | input | L363-L379 | Updates start/analyze buttons. Shows/removes format hint if key doesn't start with `sk-ant-`. |
 | `#analyze-components-btn` | click | L392-L451 | Posts to analyze endpoint, polls status every 2s (max 150 retries / ~5 min). On completion, loads components and shows step 2. |
-| `#precise-btn` | click | L488-L506 | Posts to precise estimate endpoint, updates cards and labels |
-| `#start-audit-btn` | click | L544-L568 | Builds audit body (level, apiKey, optional baseAuditId, optional componentIds), posts to `/api/audit/start`, redirects to `/audit.html?auditId=` |
-| `#incremental-btn` | click | L585-L592 | Sets `useIncremental = true`, toggles button styles |
-| `#fresh-btn` | click | L594-L601 | Sets `useIncremental = false`, toggles button styles |
+| `#precise-btn` | click | L488-L505 | Posts to precise estimate endpoint, updates cards, labels, and start button. Does not re-render project stats (repo metadata unchanged). |
+| `#start-audit-btn` | click | L543-L567 | Builds audit body (level, apiKey, optional baseAuditId, optional componentIds), posts to `/api/audit/start`, redirects to `/audit.html?auditId=` |
+| `#incremental-btn` | click | L584-L591 | Sets `useIncremental = true`, toggles button styles |
+| `#fresh-btn` | click | L593-L600 | Sets `useIncremental = false`, toggles button styles |
 | `#reanalyze-btn` | click | L346-L351 | Shows analyze section, hides reanalyze section |
-| `#change-branches-btn` | click | L611-L657 | Loads branches for all repos in parallel, renders branch editor dropdowns |
-| `#cancel-branches-btn` | click | L659-L662 | Hides branch editor, re-enables change button |
-| `#apply-branches-btn` | click | L664-L705 | Collects branch selections, PUTs to update, re-fetches project+estimate |
+| `#change-branches-btn` | click | L610-L656 | Loads branches for all repos in parallel, renders branch editor dropdowns |
+| `#cancel-branches-btn` | click | L658-L661 | Hides branch editor, re-enables change button |
+| `#apply-branches-btn` | click | L663-L704 | Collects branch selections, PUTs to update, re-fetches project+estimate |
 | `#select-all-components` (checkbox) | change | L291-L302 | Toggles all `.component-checkbox` elements |
 | `.component-checkbox` (each) | change | L286-L288 | Calls `onComponentSelectionChange` |
 

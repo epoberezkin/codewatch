@@ -493,7 +493,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     preciseBtn.textContent = 'Calculating...';
     try {
       const precise = await apiPost<EstimateData>('/api/estimate/precise', { projectId });
-      renderProjectStats(precise, projectData!.githubOrg);
       renderEstimateCards(precise);
       updatePrecisionLabel(precise);
       updateAnalysisCostHint(precise);

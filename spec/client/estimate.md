@@ -201,7 +201,7 @@ interface AnalysisStatus {
 - `selectedComponentIds` Set drives component scoping.
 - `selectedLevel` drives audit level.
 - `estimateData` is refreshed on scoped re-estimation and branch changes.
-- `previousAudit` notice and incremental toggle only shown when `estimate.previousAudit` is present AND `project.ownership?.isOwner` is true (defensive guard — server already omits `previousAudit` for non-owners).
+- `previousAudit` notice and incremental toggle are currently hidden unconditionally — the init code does not show the notice or set `baseAuditId`. Server-side incremental support remains intact.
 - Component analysis uses polling (2s interval, max 150 retries).
 
 ---

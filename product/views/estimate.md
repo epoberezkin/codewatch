@@ -47,18 +47,11 @@ Configure and start a security audit with full cost transparency. The page loads
 
 ### 2. Previous Audit Notice
 
-**Container:** `#previous-audit-notice` (hidden by default).
+**Container:** `#previous-audit-notice` (**currently hidden unconditionally**).
 
-Only shown to verified project owners. The server omits `previousAudit` from the estimate response for non-owners, and the client has a defensive guard requiring `project.ownership?.isOwner`. Displays two buttons:
+The incremental/fresh toggle UI exists in the HTML but is never shown. The server-side incremental audit support is fully implemented (see [audit-lifecycle.md](../flows/audit-lifecycle.md) Step 0c), but the UI is hidden because the cost estimates do not differentiate between fresh and incremental modes — showing the toggle without accurate cost feedback is misleading. See `product/gaps.md` for the incremental cost estimation gap.
 
-| Button | Effect |
-|---|---|
-| **Run Incremental** (`#incremental-btn`) | Sets `useIncremental = true`, highlights itself as primary, updates start button label to prefix "Start incremental". |
-| **Run Fresh Audit** (`#fresh-btn`) | Sets `useIncremental = false`, highlights itself as primary. |
-
-Selection is toggle-style (one active at a time via class swap between `btn-primary` / `btn-secondary`). A help paragraph explains the difference between modes.
-
-When incremental is chosen and the audit is started, `baseAuditId` is sent in the `POST /api/audit/start` payload.
+All audits started from the estimate page are fresh audits.
 
 ### 3. Clone Errors
 

@@ -274,6 +274,12 @@ If analysis returns zero components, Step 2 is not shown and the analyze section
 
 **REC:** Show an explicit "No components found" message when analysis returns zero results.
 
+### GAP: Incremental audit UI hidden — no cost estimation for incremental mode
+**Source:** [estimate.md](views/estimate.md)
+The incremental/fresh toggle is hidden because `POST /api/estimate` and `tokens.ts` cost functions have no incremental awareness — they always estimate based on all project files. The actual cost reduction (only changed files analyzed) happens during audit execution, but the user has no visibility into this before starting. To re-enable the UI, the estimate endpoint would need to accept `baseAuditId`, compute `git diff`, and return differential cost estimates.
+
+**REC:** Extend `POST /api/estimate` to optionally accept `baseAuditId`, compute the diff, and return separate `incrementalEstimates` alongside the full estimates. Then re-enable the toggle UI with accurate per-mode costs.
+
 ### GAP: Existing projects have corrupted threat_model data
 **Source:** [audit.md](../spec/services/audit.md)
 Projects classified before the storage fix have `threat_model` stored as plain text instead of JSON when `threat_model_source = 'generated'`. The `parties` array is lost. Re-running classification (re-analyzing components) regenerates the data correctly.

@@ -105,10 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       show('clone-errors');
     }
 
-    if (estimate.previousAudit && project.ownership?.isOwner) {
-      show('previous-audit-notice');
-      baseAuditId = estimate.previousAudit.id;
-    }
+    // Incremental audit UI hidden — cost estimates don't differentiate yet (see product/gaps.md)
 
     // Show ownership badge and access tier preview
     const user = currentUser;

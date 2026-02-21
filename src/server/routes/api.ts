@@ -834,6 +834,25 @@ router.post('/estimate', async (req: Request, res: Response) => {
       return;
     }
 
+    // Resolve ownership to gate previousAudit visibility
+    const { rows: projRow } = await pool.query(
+      'SELECT github_org FROM projects WHERE id = $1', [projectId]
+    );
+    const githubOrg = projRow[0]?.github_org;
+    let isOwner = false;
+    if (githubOrg) {
+      const session = await getSessionInfo(pool, req.cookies?.session);
+      if (session) {
+        try {
+          const ownership = await resolveOwnership(
+            pool, session.userId, githubOrg,
+            session.githubUsername, session.githubToken, session.hasOrgScope,
+          );
+          isOwner = ownership.isOwner;
+        } catch { /* ignore */ }
+      }
+    }
+
     // Clone/update each repo and scan files
     const repoBreakdown: Array<{ repoName: string; files: number; tokens: number; headSha?: string; branch?: string }> = [];
     const cloneErrors: Array<{ repoName: string; error: string }> = [];
@@ -923,7 +942,7 @@ router.post('/estimate', async (req: Request, res: Response) => {
       analysisCostHint,
     };
 
-    if (prevAudits.length > 0) {
+    if (prevAudits.length > 0 && isOwner) {
       result.previousAudit = {
         id: prevAudits[0].id,
         createdAt: prevAudits[0].created_at,
@@ -1293,6 +1312,22 @@ router.post('/audit/start', requireAuth as any, async (req: Request, res: Respon
       );
       if (validComps.length !== validComponentIds.length) {
         res.status(400).json({ error: 'One or more component IDs are invalid for this project' });
+        return;
+      }
+    }
+
+    // Only project owners can run incremental audits (prevents finding leakage)
+    if (baseAuditId && !isOwner) {
+      res.status(403).json({ error: 'Only project owners can run incremental audits' });
+      return;
+    }
+    if (baseAuditId) {
+      const { rows: baseRows } = await pool.query(
+        `SELECT id FROM audits WHERE id = $1 AND project_id = $2 AND status = 'completed'`,
+        [baseAuditId, projectId]
+      );
+      if (baseRows.length === 0) {
+        res.status(400).json({ error: 'Invalid base audit for this project' });
         return;
       }
     }

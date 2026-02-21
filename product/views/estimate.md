@@ -49,7 +49,7 @@ Configure and start a security audit with full cost transparency. The page loads
 
 **Container:** `#previous-audit-notice` (hidden by default).
 
-Shown when `EstimateData.previousAudit` is present. Displays two buttons:
+Only shown to verified project owners. The server omits `previousAudit` from the estimate response for non-owners, and the client has a defensive guard requiring `project.ownership?.isOwner`. Displays two buttons:
 
 | Button | Effect |
 |---|---|

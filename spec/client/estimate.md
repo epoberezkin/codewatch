@@ -1,6 +1,6 @@
 # estimate.ts -- Estimate Page Module
 
-**Source**: [`estimate.ts`](../../src/client/estimate.ts#L1-L706)
+**Source**: [`estimate.ts`](../../src/client/estimate.ts#L1-L709)
 **HTML**: `public/estimate.html`
 
 ---
@@ -119,7 +119,7 @@ interface AnalysisStatus {
 | `.estimate-card` (each) | click, keydown (Enter/Space) | L455-L483 | Selects level card, shows step 3, updates start button. Cards have `role="button"`, `tabindex="0"`, `aria-pressed`. |
 | `#api-key` (input) | input | L363-L379 | Updates start/analyze buttons. Shows/removes format hint if key doesn't start with `sk-ant-`. |
 | `#analyze-components-btn` | click | L392-L451 | Posts to analyze endpoint, polls status every 2s (max 150 retries / ~5 min). On completion, loads components and shows step 2. |
-| `#precise-btn` | click | L488-L505 | Posts to precise estimate endpoint, updates cards, labels, and start button. Does not re-render project stats (repo metadata unchanged). |
+| `#precise-btn` | click | L488-L507 | Posts to precise estimate endpoint, updates cards, labels, and start button. Does not re-render project stats (repo metadata unchanged). |
 | `#start-audit-btn` | click | L543-L567 | Builds audit body (level, apiKey, optional baseAuditId, optional componentIds), posts to `/api/audit/start`, redirects to `/audit.html?auditId=` |
 | `#incremental-btn` | click | L584-L591 | Sets `useIncremental = true`, toggles button styles |
 | `#fresh-btn` | click | L593-L600 | Sets `useIncremental = false`, toggles button styles |
@@ -201,6 +201,7 @@ interface AnalysisStatus {
 - `selectedComponentIds` Set drives component scoping.
 - `selectedLevel` drives audit level.
 - `estimateData` is refreshed on scoped re-estimation and branch changes.
+- `previousAudit` notice and incremental toggle only shown when `estimate.previousAudit` is present AND `project.ownership?.isOwner` is true (defensive guard — server already omits `previousAudit` for non-owners).
 - Component analysis uses polling (2s interval, max 150 retries).
 
 ---

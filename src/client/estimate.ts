@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       show('clone-errors');
     }
 
-    if (estimate.previousAudit) {
+    if (estimate.previousAudit && project.ownership?.isOwner) {
       show('previous-audit-notice');
       baseAuditId = estimate.previousAudit.id;
     }

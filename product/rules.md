@@ -249,3 +249,9 @@ Comprehensive list of invariants that MUST be maintained across the codebase. Ev
 **Enforced by:** [src/server/routes/api.ts:DELETE /api/audit/:id](../src/server/routes/api.ts) (L2016-2031) -- `SELECT id, requester_id FROM audits WHERE id = $1 FOR UPDATE`
 **Tested by:** [test/api/delete.test.ts](../test/api/delete.test.ts) -- `requester can delete their own audit`, `other user cannot delete audit`
 **Spec:** [spec/api.md](../spec/api.md)
+
+### RULE-39: Only project owners can run incremental audits
+**Rule:** Incremental audits (with `baseAuditId`) require verified GitHub ownership. `POST /api/estimate` omits `previousAudit` for non-owners. `POST /api/audit/start` rejects `baseAuditId` with 403 for non-owners. `baseAuditId` must reference a completed audit belonging to the same project.
+**Enforced by:** [src/server/routes/api.ts:POST /api/estimate](../src/server/routes/api.ts) (L945) -- `if (prevAudits.length > 0 && isOwner)`; [src/server/routes/api.ts:POST /api/audit/start](../src/server/routes/api.ts) (L1319-1332) -- ownership + project-membership validation
+**Tested by:** `[UNTESTED]`
+**Spec:** [spec/api.md](../spec/api.md), [product/flows/audit-lifecycle.md](./flows/audit-lifecycle.md)

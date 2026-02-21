@@ -87,6 +87,8 @@ If `componentIds` were specified:
 
 ### Step 0c: Incremental Diff (if base audit exists)
 
+**Access control:** Only verified project owners can run incremental audits. `POST /api/audit/start` rejects `baseAuditId` with 403 for non-owners. The `baseAuditId` must reference a completed audit belonging to the same project (validated server-side).
+
 If `baseAuditId` is provided:
 - Retrieve the base audit's commit SHAs per repo.
 - Run `git diff --name-status` between base and current commit for each repo.
